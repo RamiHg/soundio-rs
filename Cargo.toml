@@ -1,0 +1,44 @@
+[package]
+name = "soundio"
+version = "0.2.0"
+authors = ["Tim Hutt <tdhutt@gmail.com>"]
+license = "MIT"
+readme = "Readme.md"
+repository = "https://github.com/Timmmm/soundio-rs"
+homepage = "https://github.com/Timmmm/soundio-rs"
+documentation = "https://docs.rs/soundio/"
+description = """
+Bindings to libsoundio for audio input and output.
+"""
+keywords = ["audio", "media", "soundio"]
+categories = ["multimedia", "multimedia::audio"]
+
+[dependencies]
+libc = "0.2"
+libsoundio-sys = { path = "libsoundio-sys", version = "0.2.0" }
+
+# Examples
+
+[[example]]
+name = "player"
+path = "examples/player/main.rs"
+
+[[example]]
+name = "recorder"
+path = "examples/recorder/main.rs"
+
+[[example]]
+name = "list_devices"
+path = "examples/list_devices/main.rs"
+
+[[example]]
+name = "sine"
+path = "examples/sine/main.rs"
+
+[dev_dependencies]
+crossbeam = "0.2.10"
+hound = "3.0.0"
+
+[badges]
+travis-ci = { repository = "https://github.com/Timmmm/soundio-rs", branch = "master" }
+appveyor = { repository = "https://github.com/Timmmm/soundio-rs", branch = "master", service = "github" }

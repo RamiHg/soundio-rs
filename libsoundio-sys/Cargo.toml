@@ -1,0 +1,25 @@
+[package]
+name = "libsoundio-sys"
+edition = "2018"
+version = "0.2.0"
+authors = ["Tim Hutt <tdhutt@gmail.com>"]
+links = "soundio"
+build = "build.rs"
+repository = "https://github.com/Timmmm/soundio-rs"
+license = "MIT"
+description = "Native bindings to the libsoundio library"
+keywords = ["audio", "media", "soundio"]
+categories = ["multimedia", "multimedia::audio"]
+
+[lib]
+name = "libsoundio_sys"
+path = "lib.rs"
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+pkg-config = "0.3"
+cmake = "0.1.40"
+cc = "1.0.37"
+

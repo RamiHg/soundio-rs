@@ -1,0 +1,50 @@
+language: rust
+sudo: required # To install g++-4.9
+dist: trusty
+
+rust: stable
+
+# libsoundio requires GCC 4.9 for C11 support and for stdatomic.h.
+addons:
+    apt:
+        sources:
+            - ubuntu-toolchain-r-test
+        packages:
+            - gcc-4.9
+
+matrix:
+    include:
+        - os: linux
+          env:
+            - TARGET=i686-unknown-linux-musl
+            - CC=gcc-4.9
+
+        - os: linux
+          env:
+            - TARGET=x86_64-unknown-linux-musl
+            - CC=gcc-4.9
+
+        - os: osx
+          env: TARGET=i686-apple-darwin
+
+        - os: osx
+          env: TARGET=x86_64-apple-darwin
+
+    # Exclude default build. Yes this is a really weird way to do it.
+    # See https://github.com/travis-ci/travis-ci/issues/4681
+    exclude:
+        - rust: stable
+
+cache: cargo
+
+before_cache:
+    # Travis can't cache files that are not readable by "others"
+    - chmod -R a+r $HOME/.cargo
+
+branches:
+    only:
+        - master
+
+# Disable tests for now.
+script:
+    - cargo build --verbose
