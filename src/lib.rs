@@ -164,6 +164,12 @@
 //! satisfy you for some reason. It is developed [on github](https://github.com/Timmmm/soundio-rs).
 //! Bugs, suggestions and praise are welcome!
 
+#![warn(clippy::all)]
+#![allow(clippy::new_without_default)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::missing_safety_doc)]
+
 extern crate libsoundio_sys as raw;
 
 mod backend;

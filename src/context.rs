@@ -6,7 +6,6 @@ use super::error::*;
 
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int};
-use std::ptr;
 
 /// `Context` represents the libsoundio library context.
 ///
@@ -34,9 +33,9 @@ pub struct Context<'a> {
 
 // The callbacks required for a context are stored in this object.
 pub struct ContextUserData<'a> {
-    backend_disconnect_callback: Option<Box<FnMut(Error) + 'a>>,
-    devices_change_callback: Option<Box<FnMut() + 'a>>,
-    events_signal_callback: Option<Box<FnMut() + 'a>>,
+    backend_disconnect_callback: Option<Box<dyn FnMut(Error) + 'a>>,
+    devices_change_callback: Option<Box<dyn FnMut() + 'a>>,
+    events_signal_callback: Option<Box<dyn FnMut() + 'a>>,
 }
 
 // See `Context::new_with_callbacks()`.
@@ -107,12 +106,12 @@ impl<'a> Context<'a> {
     /// ```
     pub fn new() -> Context<'a> {
         let soundio = unsafe { raw::soundio_create() };
-        if soundio == ptr::null_mut() {
+        if soundio.is_null() {
             panic!("soundio_create() failed (out of memory).");
         }
 
         let mut context = Context {
-            soundio: soundio,
+            soundio,
             // The default name in libsoundio is "SoundIo". We replicate that here for `Context::app_name()`.
             app_name: "SoundIo".to_string(),
             userdata: Box::new(ContextUserData {
@@ -440,7 +439,7 @@ impl<'a> Context<'a> {
     /// ```
     pub fn input_device(&self, index: usize) -> Result<Device> {
         let device = unsafe { raw::soundio_get_input_device(self.soundio, index as c_int) };
-        if device == ptr::null_mut() {
+        if device.is_null() {
             return Err(Error::OpeningDevice);
         }
 
@@ -451,7 +450,7 @@ impl<'a> Context<'a> {
         }
 
         Ok(Device {
-            device: device,
+            device,
             phantom: PhantomData,
         })
     }
@@ -478,7 +477,7 @@ impl<'a> Context<'a> {
     /// ```
     pub fn output_device(&self, index: usize) -> Result<Device> {
         let device = unsafe { raw::soundio_get_output_device(self.soundio, index as c_int) };
-        if device == ptr::null_mut() {
+        if device.is_null() {
             return Err(Error::OpeningDevice);
         }
 
@@ -489,7 +488,7 @@ impl<'a> Context<'a> {
         }
 
         Ok(Device {
-            device: device,
+            device,
             phantom: PhantomData,
         })
     }
@@ -687,7 +686,7 @@ unsafe impl<'a> Sync for Context<'a> {}
 
 #[cfg(test)]
 mod tests {
-    use super::super::backend::*;
+
     use super::*;
 
     #[test]

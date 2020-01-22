@@ -6,7 +6,7 @@ use std::env;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
-use std::sync::atomic::{AtomicBool, Ordering};
+
 
 // Maybe the best way to do this is something like:
 //

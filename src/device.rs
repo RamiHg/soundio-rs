@@ -10,7 +10,6 @@ use super::util::*;
 
 use std::marker::PhantomData;
 use std::os::raw::c_int;
-use std::ptr;
 use std::slice;
 
 /// Device represents an input or output device.
@@ -324,7 +323,7 @@ impl<'a> Device<'a> {
         ErrorCB: 'b + FnMut(Error),
     {
         let mut outstream = unsafe { raw::soundio_outstream_create(self.device) };
-        if outstream == ptr::null_mut() {
+        if outstream.is_null() {
             // Note that we should really abort() here (that's what the rest of Rust
             // does on OOM), but there is no stable way to abort in Rust that I can see.
             panic!("soundio_outstream_create() failed (out of memory).");
@@ -342,7 +341,7 @@ impl<'a> Device<'a> {
 
         let mut stream = OutStream {
             userdata: Box::new(OutStreamUserData {
-                outstream: outstream,
+                outstream,
                 write_callback: Box::new(write_callback),
                 underflow_callback: match underflow_callback {
                     Some(cb) => Some(Box::new(cb)),
@@ -428,7 +427,7 @@ impl<'a> Device<'a> {
         ErrorCB: 'b + FnMut(Error),
     {
         let mut instream = unsafe { raw::soundio_instream_create(self.device) };
-        if instream == ptr::null_mut() {
+        if instream.is_null() {
             // Note that we should really abort() here (that's what the rest of Rust
             // does on OOM), but there is no stable way to abort in Rust that I can see.
             panic!("soundio_instream_create() failed (out of memory).");
@@ -446,7 +445,7 @@ impl<'a> Device<'a> {
 
         let mut stream = InStream {
             userdata: Box::new(InStreamUserData {
-                instream: instream,
+                instream,
                 read_callback: Box::new(read_callback),
                 overflow_callback: match overflow_callback {
                     Some(cb) => Some(Box::new(cb)),

@@ -255,8 +255,8 @@ impl Format {
     /// let b = soundio::Format::Float64LE;
     /// assert_eq!(b.bytes_per_sample(), 8);
     /// ```
-    pub fn bytes_per_sample(&self) -> usize {
-        unsafe { raw::soundio_get_bytes_per_sample((*self).into()) as usize }
+    pub fn bytes_per_sample(self) -> usize {
+        unsafe { raw::soundio_get_bytes_per_sample(self.into()) as usize }
     }
 
     /// Returns the number of bytes per frame.
@@ -271,7 +271,7 @@ impl Format {
     /// let b = soundio::Format::Float64LE;
     /// assert_eq!(b.bytes_per_frame(4), 32);
     /// ```
-    pub fn bytes_per_frame(&self, channel_count: usize) -> usize {
+    pub fn bytes_per_frame(self, channel_count: usize) -> usize {
         self.bytes_per_sample() * channel_count
     }
 
@@ -286,7 +286,7 @@ impl Format {
     /// let b = soundio::Format::Float64LE;
     /// assert_eq!(b.bytes_per_second(4, 4000), 128000);
     /// ```
-    pub fn bytes_per_second(&self, channel_count: usize, sample_rate: usize) -> usize {
+    pub fn bytes_per_second(self, channel_count: usize, sample_rate: usize) -> usize {
         self.bytes_per_sample() * channel_count * sample_rate
     }
 }

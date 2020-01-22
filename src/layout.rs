@@ -49,12 +49,13 @@ impl From<ChannelLayout> for raw::SoundIoChannelLayout {
             name: ptr::null(),
 
             // Channel counts are silently truncated to SOUNDIO_MAX_CHANNELS.
+            // TODO: Limit the number of possible channels in layout (e.g. using arrayvec).
             channel_count: min(layout.channels.len(), raw::SOUNDIO_MAX_CHANNELS) as c_int,
             channels: {
                 let mut c =
                     [raw::SoundIoChannelId::SoundIoChannelIdInvalid; raw::SOUNDIO_MAX_CHANNELS];
-                for i in 0..min(layout.channels.len(), c.len()) {
-                    c[i] = layout.channels[i].into();
+                for (dst, &src) in c[..layout.channels.len()].iter_mut().zip(&layout.channels) {
+                    *dst = src.into();
                 }
                 c
             },
@@ -129,8 +130,8 @@ impl ChannelLayout {
     /// let Some(best_layout) = best_layout;
     /// ```
     pub fn best_matching_channel_layout(
-        preferred_layouts: &Vec<ChannelLayout>,
-        available_layouts: &Vec<ChannelLayout>,
+        preferred_layouts: &[ChannelLayout],
+        available_layouts: &[ChannelLayout],
     ) -> Option<ChannelLayout> {
         for preferred_layout in preferred_layouts {
             if available_layouts.contains(preferred_layout) {

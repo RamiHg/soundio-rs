@@ -121,7 +121,7 @@ impl error::Error for Error {
         c_str.to_str().unwrap()
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // We never have any more cause information unfortunately.
         None
     }

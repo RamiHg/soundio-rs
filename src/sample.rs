@@ -2,8 +2,6 @@
 //! for the common sample formats. Because there is no native `u24` or `i24` I added one via the newtype
 //! pattern using `u32` and `i32`.
 
-use std;
-
 /// The Sample trait defines functions to convert between the various sample formats. The full range
 /// of the integer sample formats is always used, so `0u16.to_i8()` is -128. Converting between
 /// signed and unsigned of the same size is lossless, as is increasing the bit depth.
@@ -79,22 +77,22 @@ pub struct i24(i32);
 impl u24 {
     #[inline]
     pub fn min_value() -> u32 {
-        0x00000000
+        0x0000_0000
     }
     #[inline]
     pub fn max_value() -> u32 {
-        0x00FFFFFF
+        0x00FF_FFFF
     }
 }
 
 impl i24 {
     #[inline]
     pub fn min_value() -> i32 {
-        -0x0080000
+        -0x008_0000
     }
     #[inline]
     pub fn max_value() -> i32 {
-        0x007FFFFF
+        0x007F_FFFF
     }
 }
 
@@ -434,16 +432,16 @@ impl Sample for i32 {
 macro_rules! impl_float_raw_methods {
     ($uint_ty:ident) => {
         unsafe fn from_raw_le(ptr: *const u8) -> Self {
-            std::mem::transmute($uint_ty::from_le(*(ptr as *const _)))
+            Self::from_bits($uint_ty::from_le(*(ptr as *const _)))
         }
         unsafe fn from_raw_be(ptr: *const u8) -> Self {
-            std::mem::transmute($uint_ty::from_be(*(ptr as *const _)))
+            Self::from_bits($uint_ty::from_be(*(ptr as *const _)))
         }
         unsafe fn to_raw_le(v: Self, ptr: *mut u8) {
-            *(ptr as *mut _) = $uint_ty::to_le(std::mem::transmute(v));
+            *(ptr as *mut _) = v.to_le_bytes();
         }
         unsafe fn to_raw_be(v: Self, ptr: *mut u8) {
-            *(ptr as *mut _) = $uint_ty::to_le(std::mem::transmute(v));
+            *(ptr as *mut _) = v.to_be_bytes();
         }
     };
 }

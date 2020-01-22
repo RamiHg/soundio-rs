@@ -75,9 +75,9 @@ pub struct OutStream<'a> {
 pub struct OutStreamUserData<'a> {
     pub outstream: *mut raw::SoundIoOutStream,
 
-    pub write_callback: Box<FnMut(&mut OutStreamWriter) + 'a>,
-    pub underflow_callback: Option<Box<FnMut() + 'a>>,
-    pub error_callback: Option<Box<FnMut(Error) + 'a>>,
+    pub write_callback: Box<dyn FnMut(&mut OutStreamWriter) + 'a>,
+    pub underflow_callback: Option<Box<dyn FnMut() + 'a>>,
+    pub error_callback: Option<Box<dyn FnMut(Error) + 'a>>,
 }
 
 impl<'a> Drop for OutStreamUserData<'a> {
@@ -425,7 +425,7 @@ impl<'a> OutStreamWriter<'a> {
         unsafe {
             let ptr = self.channel_areas[channel]
                 .ptr
-                .offset((frame * self.channel_areas[channel].step as usize) as isize)
+                .add(frame * self.channel_areas[channel].step as usize)
                 as *mut u8;
 
             match (*self.outstream).format {

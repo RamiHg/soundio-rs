@@ -75,9 +75,9 @@ pub struct InStream<'a> {
 pub struct InStreamUserData<'a> {
     pub instream: *mut raw::SoundIoInStream,
 
-    pub read_callback: Box<FnMut(&mut InStreamReader) + 'a>,
-    pub overflow_callback: Option<Box<FnMut() + 'a>>,
-    pub error_callback: Option<Box<FnMut(Error) + 'a>>,
+    pub read_callback: Box<dyn FnMut(&mut InStreamReader) + 'a>,
+    pub overflow_callback: Option<Box<dyn FnMut() + 'a>>,
+    pub error_callback: Option<Box<dyn FnMut(Error) + 'a>>,
 }
 
 impl<'a> Drop for InStreamUserData<'a> {
@@ -375,7 +375,7 @@ impl<'a> InStreamReader<'a> {
         unsafe {
             let ptr = self.channel_areas[channel]
                 .ptr
-                .offset((frame * self.channel_areas[channel].step as usize) as isize)
+                .add(frame * self.channel_areas[channel].step as usize)
                 as *mut u8;
 
             match (*self.instream).format {
