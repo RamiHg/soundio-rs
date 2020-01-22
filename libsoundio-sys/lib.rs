@@ -1,8 +1,7 @@
-#![allow(dead_code)]
+#![deny(warnings)]
+#![warn(clippy::all)]
 
-extern crate libc;
-
-use std::os::raw::{c_char, c_void, c_int, c_double, c_float};
+use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
 
 // There is no c_bool, but you can use Rust's i8 or bool instead.
 // See https://github.com/rust-lang/rfcs/pull/954#issuecomment-169820630
@@ -18,7 +17,6 @@ type c_bool = i8;
  *
  * Documentation: soundio.h
  */
-
 
 /** \example sio_list_devices.c
  * List the available input and output devices on the system and their
@@ -279,7 +277,7 @@ pub struct SoundIo {
     pub userdata: *mut c_void,
     // Optional callback. Called when the list of devices change. Only called
     // during a call to ::soundio_flush_events or ::soundio_wait_events.
-	pub on_devices_change: Option<extern fn(sio: *mut SoundIo)>,
+    pub on_devices_change: Option<extern "C" fn(sio: *mut SoundIo)>,
     // Optional callback. Called when the backend disconnects. For example,
     // when the JACK server shuts down. When this happens, listing devices
     // and opening streams will always fail with
@@ -296,11 +294,11 @@ pub struct SoundIo {
     // * #SoundIoErrorSystemResources
     // * #SoundIoErrorOpeningDevice - unexpected problem accessing device
     //   information
-	pub on_backend_disconnect: Option<extern fn(sio: *mut SoundIo, err: c_int)>,
+    pub on_backend_disconnect: Option<extern "C" fn(sio: *mut SoundIo, err: c_int)>,
     // Optional callback. Called from an unknown thread that you should not use
     // to call any soundio functions. You may use this to signal a condition
     // variable to wake up. Called when ::soundio_wait_events would be woken up.
-	pub on_events_signal: Option<extern fn(sio: *mut SoundIo)>,
+    pub on_events_signal: Option<extern "C" fn(sio: *mut SoundIo)>,
 
     // Read-only. After calling ::soundio_connect or ::soundio_connect_backend,
     // this field tells which backend is currently connected.
@@ -318,7 +316,7 @@ pub struct SoundIo {
     // a message instructing the user how to configure their system to allow
     // real-time priority threads. This must be set to a function not NULL.
     // To silence the warning, assign this to a function that does nothing.
-	pub emit_rtprio_warning: Option<extern fn()>,
+    pub emit_rtprio_warning: Option<extern "C" fn()>,
 
     // Optional: JACK info callback.
     // By default, libsoundio sets this to an empty function in order to
@@ -326,10 +324,10 @@ pub struct SoundIo {
     // setting this to `NULL` or providing your own function. This is
     // registered with JACK regardless of whether ::soundio_connect_backend
     // succeeds.
-	pub jack_info_callback: Option<extern fn(msg: *const c_char)>,
+    pub jack_info_callback: Option<extern "C" fn(msg: *const c_char)>,
     // Optional: JACK error callback.
     // See SoundIo::jack_info_callback
-	pub jack_error_callback: Option<extern fn(msg: *const c_char)>,
+    pub jack_error_callback: Option<extern "C" fn(msg: *const c_char)>,
 }
 
 // The size of this struct is not part of the API or ABI.
@@ -507,19 +505,23 @@ pub struct SoundIoOutStream {
     // for a long time. This includes all I/O functions (disk, TTY, network),
     // malloc, free, printf, pthread_mutex_lock, sleep, wait, poll, select,
     // pthread_join, pthread_cond_wait, etc.
-	pub write_callback: extern fn(stream: *mut SoundIoOutStream, frame_count_min: c_int, frame_count_max: c_int),
+    pub write_callback: extern "C" fn(
+        stream: *mut SoundIoOutStream,
+        frame_count_min: c_int,
+        frame_count_max: c_int,
+    ),
     // This optional callback happens when the sound device runs out of
     // buffered audio data to play. After this occurs, the outstream waits
     // until the buffer is full to resume playback.
     // This is called from the SoundIoOutStream::write_callback thread context.
-	pub underflow_callback: Option<extern fn(stream: *mut SoundIoOutStream)>,
+    pub underflow_callback: Option<extern "C" fn(stream: *mut SoundIoOutStream)>,
     // Optional callback. `err` is always SoundIoErrorStreaming.
     // SoundIoErrorStreaming is an unrecoverable error. The stream is in an
     // invalid state and must be destroyed.
     // If you do not supply error_callback, the default callback will print
     // a message to stderr and then call `abort`.
     // This is called from the SoundIoOutStream::write_callback thread context.
-	pub error_callback: Option<extern fn(stream: *mut SoundIoOutStream, err: c_int)>,
+    pub error_callback: Option<extern "C" fn(stream: *mut SoundIoOutStream, err: c_int)>,
 
     // Optional: Name of the stream. Defaults to "SoundIoOutStream"
     // PulseAudio uses this for the stream name.
@@ -533,7 +535,6 @@ pub struct SoundIoOutStream {
     // JACK and it means that the output stream data originates from an input
     // stream. Defaults to `false`.
     pub non_terminal_hint: c_bool,
-
 
     // computed automatically when you call ::soundio_outstream_open
     pub bytes_per_frame: c_int,
@@ -592,19 +593,20 @@ pub struct SoundIoInStream {
     // for a long time. This includes all I/O functions (disk, TTY, network),
     // malloc, free, printf, pthread_mutex_lock, sleep, wait, poll, select,
     // pthread_join, pthread_cond_wait, etc.
-	pub read_callback: extern fn(stream: *mut SoundIoInStream, frame_count_min: c_int, frame_count_max: c_int),
+    pub read_callback:
+        extern "C" fn(stream: *mut SoundIoInStream, frame_count_min: c_int, frame_count_max: c_int),
     // This optional callback happens when the sound device buffer is full,
     // yet there is more captured audio to put in it.
     // This is never fired for PulseAudio.
     // This is called from the SoundIoInStream::read_callback thread context.
-	pub overflow_callback: Option<extern fn(stream: *mut SoundIoInStream)>,
+    pub overflow_callback: Option<extern "C" fn(stream: *mut SoundIoInStream)>,
     // Optional callback. `err` is always SoundIoErrorStreaming.
     // SoundIoErrorStreaming is an unrecoverable error. The stream is in an
     // invalid state and must be destroyed.
     // If you do not supply `error_callback`, the default callback will print
     // a message to stderr and then abort().
     // This is called from the SoundIoInStream::read_callback thread context.
-	pub error_callback: Option<extern fn(stream: *mut SoundIoInStream, err: c_int)>,
+    pub error_callback: Option<extern "C" fn(stream: *mut SoundIoInStream, err: c_int)>,
 
     // Optional: Name of the stream. Defaults to "SoundIoInStream";
     // PulseAudio uses this for the stream name.
@@ -629,535 +631,547 @@ pub struct SoundIoInStream {
     pub layout_error: c_int,
 }
 
-pub enum SoundIoRingBuffer {
+pub enum SoundIoRingBuffer {}
+
+extern "C" {
+
+    // See also ::soundio_version_major, ::soundio_version_minor, ::soundio_version_patch
+    pub fn soundio_version_string() -> *const c_char;
+    // See also ::soundio_version_string, ::soundio_version_minor, ::soundio_version_patch
+    pub fn soundio_version_major() -> c_int;
+    // See also ::soundio_version_major, ::soundio_version_string, ::soundio_version_patch
+    pub fn soundio_version_minor() -> c_int;
+    // See also ::soundio_version_major, ::soundio_version_minor, ::soundio_version_string
+    pub fn soundio_version_patch() -> c_int;
+
+    // Create a SoundIo context. You may create multiple instances of this to
+    // connect to multiple backends. Sets all fields to defaults.
+    // Returns `NULL` if and only if memory could not be allocated.
+    // See also ::soundio_destroy
+    pub fn soundio_create() -> *mut SoundIo;
+    pub fn soundio_destroy(soundio: *mut SoundIo);
+
+    // Tries ::soundio_connect_backend on all available backends in order.
+    // Possible errors:
+    // * #SoundIoErrorInvalid - already connected
+    // * #SoundIoErrorNoMem
+    // * #SoundIoErrorSystemResources
+    // * #SoundIoErrorNoSuchClient - when JACK returns `JackNoSuchClient`
+    // See also ::soundio_disconnect
+    pub fn soundio_connect(soundio: *mut SoundIo) -> c_int;
+    // Instead of calling ::soundio_connect you may call this function to try a
+    // specific backend.
+    // Possible errors:
+    // * #SoundIoErrorInvalid - already connected or invalid backend parameter
+    // * #SoundIoErrorNoMem
+    // * #SoundIoErrorBackendUnavailable - backend was not compiled in
+    // * #SoundIoErrorSystemResources
+    // * #SoundIoErrorNoSuchClient - when JACK returns `JackNoSuchClient`
+    // * #SoundIoErrorInitAudioBackend - requested `backend` is not active
+    // * #SoundIoErrorBackendDisconnected - backend disconnected while connecting
+    // See also ::soundio_disconnect
+    pub fn soundio_connect_backend(soundio: *mut SoundIo, backend: SoundIoBackend) -> c_int;
+    pub fn soundio_disconnect(soundio: *mut SoundIo);
+
+    // Get a string representation of a #SoundIoError
+    pub fn soundio_strerror(error: c_int) -> *const c_char;
+    // Get a string representation of a #SoundIoBackend
+    pub fn soundio_backend_name(backend: SoundIoBackend) -> *const c_char;
+
+    // Returns the number of available backends.
+    pub fn soundio_backend_count(soundio: *mut SoundIo) -> c_int;
+    // get the available backend at the specified index
+    // (0 <= index < ::soundio_backend_count)
+    pub fn soundio_get_backend(soundio: *mut SoundIo, index: c_int) -> SoundIoBackend;
+
+    // Returns whether libsoundio was compiled with backend.
+    pub fn soundio_have_backend(backend: SoundIoBackend) -> c_bool;
+
+    // Atomically update information for all connected devices. Note that calling
+    // this function merely flips a pointer; the actual work of collecting device
+    // information is done elsewhere. It is performant to call this function many
+    // times per second.
+    //
+    // When you call this, the following callbacks might be called:
+    // * SoundIo::on_devices_change
+    // * SoundIo::on_backend_disconnect
+    // This is the only time those callbacks can be called.
+    //
+    // This must be called from the same thread as the thread in which you call
+    // these functions:
+    // * ::soundio_input_device_count
+    // * ::soundio_output_device_count
+    // * ::soundio_get_input_device
+    // * ::soundio_get_output_device
+    // * ::soundio_default_input_device_index
+    // * ::soundio_default_output_device_index
+    //
+    // Note that if you do not care about learning about updated devices, you
+    // might call this function only once ever and never call
+    // ::soundio_wait_events.
+    pub fn soundio_flush_events(soundio: *mut SoundIo);
+
+    // This function calls ::soundio_flush_events then blocks until another event
+    // is ready or you call ::soundio_wakeup. Be ready for spurious wakeups.
+    pub fn soundio_wait_events(soundio: *mut SoundIo);
+
+    // Makes ::soundio_wait_events stop blocking.
+    pub fn soundio_wakeup(soundio: *mut SoundIo);
+
+    // If necessary you can manually trigger a device rescan. Normally you will
+    // not ever have to call this function, as libsoundio listens to system events
+    // for device changes and responds to them by rescanning devices and preparing
+    // the new device information for you to be atomically replaced when you call
+    // ::soundio_flush_events. However you might run into cases where you want to
+    // force trigger a device rescan, for example if an ALSA device has a
+    // SoundIoDevice::probe_error.
+    //
+    // After you call this you still have to use ::soundio_flush_events or
+    // ::soundio_wait_events and then wait for the
+    // SoundIo::on_devices_change callback.
+    //
+    // This can be called from any thread context except for
+    // SoundIoOutStream::write_callback and SoundIoInStream::read_callback
+    pub fn soundio_force_device_scan(soundio: *mut SoundIo);
+
+    // Channel Layouts
+
+    // Returns whether the channel count field and each channel id matches in
+    // the supplied channel layouts.
+    pub fn soundio_channel_layout_equal(
+        a: *mut SoundIoChannelLayout,
+        b: *mut SoundIoChannelLayout,
+    ) -> c_bool;
+
+    pub fn soundio_get_channel_name(id: SoundIoChannelId) -> *const c_char;
+    // Given UTF-8 encoded text which is the name of a channel such as
+    // "Front Left", "FL", or "front-left", return the corresponding
+    // SoundIoChannelId. Returns SoundIoChannelIdInvalid for no match.
+    pub fn soundio_parse_channel_id(str: *const c_char, str_len: c_int) -> SoundIoChannelId;
+
+    // Returns the number of builtin channel layouts.
+    pub fn soundio_channel_layout_builtin_count() -> c_int;
+    // Returns a builtin channel layout. 0 <= `index` < ::soundio_channel_layout_builtin_count
+    //
+    // Although `index` is of type `int`, it should be a valid
+    // #SoundIoChannelLayoutId enum value.
+    pub fn soundio_channel_layout_get_builtin(index: c_int) -> *const SoundIoChannelLayout;
+
+    // Get the default builtin channel layout for the given number of channels.
+    pub fn soundio_channel_layout_get_default(channel_count: c_int) -> *const SoundIoChannelLayout;
+
+    // Return the index of `channel` in `layout`, or `-1` if not found.
+    pub fn soundio_channel_layout_find_channel(
+        layout: *const SoundIoChannelLayout,
+        channel: SoundIoChannelId,
+    ) -> c_int;
+
+    // Populates the name field of layout if it matches a builtin one.
+    // returns whether it found a match
+    pub fn soundio_channel_layout_detect_builtin(layout: *mut SoundIoChannelLayout) -> c_bool;
+
+    // Iterates over preferred_layouts. Returns the first channel layout in
+    // preferred_layouts which matches one of the channel layouts in
+    // available_layouts. Returns NULL if none matches.
+    pub fn soundio_best_matching_channel_layout(
+        preferred_layouts: *const SoundIoChannelLayout,
+        preferred_layout_count: c_int,
+        available_layouts: *const SoundIoChannelLayout,
+        available_layout_count: c_int,
+    ) -> *const SoundIoChannelLayout;
+
+    // Sorts by channel count, descending.
+    pub fn soundio_sort_channel_layouts(layout: *mut SoundIoChannelLayout, layout_count: c_int);
+
+    // Sample Formats
+
+    // Returns -1 on invalid format.
+    pub fn soundio_get_bytes_per_sample(format: SoundIoFormat) -> c_int;
+
+    // A frame is one sample per channel.
+    // static inline int soundio_get_bytes_per_frame(enum SoundIoFormat format, channel_count: c_int) {
+    // 	return soundio_get_bytes_per_sample(format) * channel_count;
+    // }
+
+    // Sample rate is the number of frames per second.
+    // static inline int soundio_get_bytes_per_second(enum SoundIoFormat format,
+    // 		channel_count: c_int, int sample_rate)
+    // {
+    // 	return soundio_get_bytes_per_frame(format, channel_count) * sample_rate;
+    // }
+
+    // Returns string representation of `format`.
+    pub fn soundio_format_string(format: SoundIoFormat) -> *const c_char;
+
+    // Devices
+
+    // When you call ::soundio_flush_events, a snapshot of all device state is
+    // saved and these functions merely access the snapshot data. When you want
+    // to check for new devices, call ::soundio_flush_events. Or you can call
+    // ::soundio_wait_events to block until devices change. If an error occurs
+    // scanning devices in a background thread, SoundIo::on_backend_disconnect is called
+    // with the error code.
+
+    // Get the number of input devices.
+    // Returns -1 if you never called ::soundio_flush_events.
+    pub fn soundio_input_device_count(soundio: *mut SoundIo) -> c_int;
+    // Get the number of output devices.
+    // Returns -1 if you never called ::soundio_flush_events.
+    pub fn soundio_output_device_count(soundio: *mut SoundIo) -> c_int;
+
+    // Always returns a device. Call ::soundio_device_unref when done.
+    // `index` must be 0 <= index < ::soundio_input_device_count
+    // Returns NULL if you never called ::soundio_flush_events or if you provide
+    // invalid parameter values.
+    pub fn soundio_get_input_device(soundio: *mut SoundIo, index: c_int) -> *mut SoundIoDevice;
+    // Always returns a device. Call ::soundio_device_unref when done.
+    // `index` must be 0 <= index < ::soundio_output_device_count
+    // Returns NULL if you never called ::soundio_flush_events or if you provide
+    // invalid parameter values.
+    pub fn soundio_get_output_device(soundio: *mut SoundIo, index: c_int) -> *mut SoundIoDevice;
+
+    // returns the index of the default input device
+    // returns -1 if there are no devices or if you never called
+    // ::soundio_flush_events.
+    pub fn soundio_default_input_device_index(soundio: *mut SoundIo) -> c_int;
+
+    // returns the index of the default output device
+    // returns -1 if there are no devices or if you never called
+    // ::soundio_flush_events.
+    pub fn soundio_default_output_device_index(soundio: *mut SoundIo) -> c_int;
+
+    // Add 1 to the reference count of `device`.
+    pub fn soundio_device_ref(device: *mut SoundIoDevice);
+    // Remove 1 to the reference count of `device`. Clean up if it was the last
+    // reference.
+    pub fn soundio_device_unref(device: *mut SoundIoDevice);
+
+    // Return `true` if and only if the devices have the same SoundIoDevice::id,
+    // SoundIoDevice::is_raw, and SoundIoDevice::aim are the same.
+    pub fn soundio_device_equal(a: *const SoundIoDevice, b: *const SoundIoDevice) -> c_bool;
+
+    // Sorts channel layouts by channel count, descending.
+    pub fn soundio_device_sort_channel_layouts(device: *mut SoundIoDevice);
+
+    // Convenience function. Returns whether `format` is included in the device's
+    // supported formats.
+    pub fn soundio_device_supports_format(
+        device: *mut SoundIoDevice,
+        format: SoundIoFormat,
+    ) -> c_bool;
+
+    // Convenience function. Returns whether `layout` is included in the device's
+    // supported channel layouts.
+    pub fn soundio_device_supports_layout(
+        device: *mut SoundIoDevice,
+        layout: *const SoundIoChannelLayout,
+    ) -> c_bool;
+
+    // Convenience function. Returns whether `sample_rate` is included in the
+    // device's supported sample rates.
+    pub fn soundio_device_supports_sample_rate(
+        device: *mut SoundIoDevice,
+        sample_rate: c_int,
+    ) -> c_bool;
+
+    // Convenience function. Returns the available sample rate nearest to
+    // `sample_rate`, rounding up.
+    pub fn soundio_device_nearest_sample_rate(
+        device: *mut SoundIoDevice,
+        sample_rate: c_int,
+    ) -> c_int;
+
+    // Output Streams
+    // Allocates memory and sets defaults. Next you should fill out the struct fields
+    // and then call ::soundio_outstream_open. Sets all fields to defaults.
+    // Returns `NULL` if and only if memory could not be allocated.
+    // See also ::soundio_outstream_destroy
+    pub fn soundio_outstream_create(device: *mut SoundIoDevice) -> *mut SoundIoOutStream;
+    // You may not call this function from the SoundIoOutStream::write_callback thread context.
+    pub fn soundio_outstream_destroy(outstream: *mut SoundIoOutStream);
+
+    // After you call this function, SoundIoOutStream::software_latency is set to
+    // the correct value.
+    //
+    // The next thing to do is call ::soundio_instream_start.
+    // If this function returns an error, the outstream is in an invalid state and
+    // you must call ::soundio_outstream_destroy on it.
+    //
+    // Possible errors:
+    // * #SoundIoErrorInvalid
+    //   * SoundIoDevice::aim is not #SoundIoDeviceAimOutput
+    //   * SoundIoOutStream::format is not valid
+    //   * SoundIoOutStream::channel_count is greater than #SOUNDIO_MAX_CHANNELS
+    // * #SoundIoErrorNoMem
+    // * #SoundIoErrorOpeningDevice
+    // * #SoundIoErrorBackendDisconnected
+    // * #SoundIoErrorSystemResources
+    // * #SoundIoErrorNoSuchClient - when JACK returns `JackNoSuchClient`
+    // * #SoundIoErrorOpeningDevice
+    // * #SoundIoErrorIncompatibleBackend - SoundIoOutStream::channel_count is
+    //   greater than the number of channels the backend can handle.
+    // * #SoundIoErrorIncompatibleDevice - stream parameters requested are not
+    //   compatible with the chosen device.
+    pub fn soundio_outstream_open(outstream: *mut SoundIoOutStream) -> c_int;
+
+    // After you call this function, SoundIoOutStream::write_callback will be called.
+    //
+    // This function might directly call SoundIoOutStream::write_callback.
+    //
+    // Possible errors:
+    // * #SoundIoErrorStreaming
+    // * #SoundIoErrorNoMem
+    // * #SoundIoErrorSystemResources
+    // * #SoundIoErrorBackendDisconnected
+    pub fn soundio_outstream_start(outstream: *mut SoundIoOutStream) -> c_int;
+
+    // Call this function when you are ready to begin writing to the device buffer.
+    //  * `outstream` - (in) The output stream you want to write to.
+    //  * `areas` - (out) The memory addresses you can write data to, one per
+    //    channel. It is OK to modify the pointers if that helps you iterate.
+    //  * `frame_count` - (in/out) Provide the number of frames you want to write.
+    //    Returned will be the number of frames you can actually write, which is
+    //    also the number of frames that will be written when you call
+    //    ::soundio_outstream_end_write. The value returned will always be less
+    //    than or equal to the value provided.
+    // It is your responsibility to call this function exactly as many times as
+    // necessary to meet the `frame_count_min` and `frame_count_max` criteria from
+    // SoundIoOutStream::write_callback.
+    // You must call this function only from the SoundIoOutStream::write_callback thread context.
+    // After calling this function, write data to `areas` and then call
+    // ::soundio_outstream_end_write.
+    // If this function returns an error, do not call ::soundio_outstream_end_write.
+    //
+    // Possible errors:
+    // * #SoundIoErrorInvalid
+    //   * `*frame_count` <= 0
+    //   * `*frame_count` < `frame_count_min` or `*frame_count` > `frame_count_max`
+    //   * function called too many times without respecting `frame_count_max`
+    // * #SoundIoErrorStreaming
+    // * #SoundIoErrorUnderflow - an underflow caused this call to fail. You might
+    //   also get a SoundIoOutStream::underflow_callback, and you might not get
+    //   this error code when an underflow occurs. Unlike #SoundIoErrorStreaming,
+    //   the outstream is still in a valid state and streaming can continue.
+    // * #SoundIoErrorIncompatibleDevice - in rare cases it might just now
+    //   be discovered that the device uses non-byte-aligned access, in which
+    //   case this error code is returned.
+    pub fn soundio_outstream_begin_write(
+        outstream: *mut SoundIoOutStream,
+        areas: *mut *mut SoundIoChannelArea,
+        frame_count: *mut c_int,
+    ) -> c_int;
+
+    // Commits the write that you began with ::soundio_outstream_begin_write.
+    // You must call this function only from the SoundIoOutStream::write_callback thread context.
+    //
+    // Possible errors:
+    // * #SoundIoErrorStreaming
+    // * #SoundIoErrorUnderflow - an underflow caused this call to fail. You might
+    //   also get a SoundIoOutStream::underflow_callback, and you might not get
+    //   this error code when an underflow occurs. Unlike #SoundIoErrorStreaming,
+    //   the outstream is still in a valid state and streaming can continue.
+    pub fn soundio_outstream_end_write(outstream: *mut SoundIoOutStream) -> c_int;
+
+    // Clears the output stream buffer.
+    // This function can be called from any thread.
+    // This function can be called regardless of whether the outstream is paused
+    // or not.
+    // Some backends do not support clearing the buffer. On these backends this
+    // function will return SoundIoErrorIncompatibleBackend.
+    // Some devices do not support clearing the buffer. On these devices this
+    // function might return SoundIoErrorIncompatibleDevice.
+    // Possible errors:
+    //
+    // * #SoundIoErrorStreaming
+    // * #SoundIoErrorIncompatibleBackend
+    // * #SoundIoErrorIncompatibleDevice
+    pub fn soundio_outstream_clear_buffer(outstream: *mut SoundIoOutStream) -> c_int;
+
+    // If the underlying backend and device support pausing, this pauses the
+    // stream. SoundIoOutStream::write_callback may be called a few more times if
+    // the buffer is not full.
+    // Pausing might put the hardware into a low power state which is ideal if your
+    // software is silent for some time.
+    // This function may be called from any thread context, including
+    // SoundIoOutStream::write_callback.
+    // Pausing when already paused or unpausing when already unpaused has no
+    // effect and returns #SoundIoErrorNone.
+    //
+    // Possible errors:
+    // * #SoundIoErrorBackendDisconnected
+    // * #SoundIoErrorStreaming
+    // * #SoundIoErrorIncompatibleDevice - device does not support
+    //   pausing/unpausing. This error code might not be returned even if the
+    //   device does not support pausing/unpausing.
+    // * #SoundIoErrorIncompatibleBackend - backend does not support
+    //   pausing/unpausing.
+    // * #SoundIoErrorInvalid - outstream not opened and started
+    pub fn soundio_outstream_pause(outstream: *mut SoundIoOutStream, pause: c_bool) -> c_int;
+
+    // Obtain the total number of seconds that the next frame written after the
+    // last frame written with ::soundio_outstream_end_write will take to become
+    // audible. This includes both software and hardware latency. In other words,
+    // if you call this function directly after calling ::soundio_outstream_end_write,
+    // this gives you the number of seconds that the next frame written will take
+    // to become audible.
+    //
+    // This function must be called only from within SoundIoOutStream::write_callback.
+    //
+    // Possible errors:
+    // * #SoundIoErrorStreaming
+    pub fn soundio_outstream_get_latency(
+        outstream: *mut SoundIoOutStream,
+        out_latency: *mut c_double,
+    ) -> c_int;
+
+    // Input Streams
+    // Allocates memory and sets defaults. Next you should fill out the struct fields
+    // and then call ::soundio_instream_open. Sets all fields to defaults.
+    // Returns `NULL` if and only if memory could not be allocated.
+    // See also ::soundio_instream_destroy
+    pub fn soundio_instream_create(device: *mut SoundIoDevice) -> *mut SoundIoInStream;
+    // You may not call this function from SoundIoInStream::read_callback.
+    pub fn soundio_instream_destroy(instream: *mut SoundIoInStream);
+
+    // After you call this function, SoundIoInStream::software_latency is set to the correct
+    // value.
+    // The next thing to do is call ::soundio_instream_start.
+    // If this function returns an error, the instream is in an invalid state and
+    // you must call ::soundio_instream_destroy on it.
+    //
+    // Possible errors:
+    // * #SoundIoErrorInvalid
+    //   * device aim is not #SoundIoDeviceAimInput
+    //   * format is not valid
+    //   * requested layout channel count > #SOUNDIO_MAX_CHANNELS
+    // * #SoundIoErrorOpeningDevice
+    // * #SoundIoErrorNoMem
+    // * #SoundIoErrorBackendDisconnected
+    // * #SoundIoErrorSystemResources
+    // * #SoundIoErrorNoSuchClient
+    // * #SoundIoErrorIncompatibleBackend
+    // * #SoundIoErrorIncompatibleDevice
+    pub fn soundio_instream_open(instream: *mut SoundIoInStream) -> c_int;
+
+    // After you call this function, SoundIoInStream::read_callback will be called.
+    //
+    // Possible errors:
+    // * #SoundIoErrorBackendDisconnected
+    // * #SoundIoErrorStreaming
+    // * #SoundIoErrorOpeningDevice
+    // * #SoundIoErrorSystemResources
+    pub fn soundio_instream_start(instream: *mut SoundIoInStream) -> c_int;
+
+    // Call this function when you are ready to begin reading from the device
+    // buffer.
+    // * `instream` - (in) The input stream you want to read from.
+    // * `areas` - (out) The memory addresses you can read data from. It is OK
+    //   to modify the pointers if that helps you iterate. There might be a "hole"
+    //   in the buffer. To indicate this, `areas` will be `NULL` and `frame_count`
+    //   tells how big the hole is in frames.
+    // * `frame_count` - (in/out) - Provide the number of frames you want to read;
+    //   returns the number of frames you can actually read. The returned value
+    //   will always be less than or equal to the provided value. If the provided
+    //   value is less than `frame_count_min` from SoundIoInStream::read_callback this function
+    //   returns with #SoundIoErrorInvalid.
+    // It is your responsibility to call this function no more and no fewer than the
+    // correct number of times according to the `frame_count_min` and
+    // `frame_count_max` criteria from SoundIoInStream::read_callback.
+    // You must call this function only from the SoundIoInStream::read_callback thread context.
+    // After calling this function, read data from `areas` and then use
+    // ::soundio_instream_end_read` to actually remove the data from the buffer
+    // and move the read index forward. ::soundio_instream_end_read should not be
+    // called if the buffer is empty (`frame_count` == 0), but it should be called
+    // if there is a hole.
+    //
+    // Possible errors:
+    // * #SoundIoErrorInvalid
+    //   * `*frame_count` < `frame_count_min` or `*frame_count` > `frame_count_max`
+    // * #SoundIoErrorStreaming
+    // * #SoundIoErrorIncompatibleDevice - in rare cases it might just now
+    //   be discovered that the device uses non-byte-aligned access, in which
+    //   case this error code is returned.
+    pub fn soundio_instream_begin_read(
+        instream: *mut SoundIoInStream,
+        areas: *mut *mut SoundIoChannelArea,
+        frame_count: *mut c_int,
+    ) -> c_int;
+    // This will drop all of the frames from when you called
+    // ::soundio_instream_begin_read.
+    // You must call this function only from the SoundIoInStream::read_callback thread context.
+    // You must call this function only after a successful call to
+    // ::soundio_instream_begin_read.
+    //
+    // Possible errors:
+    // * #SoundIoErrorStreaming
+    pub fn soundio_instream_end_read(instream: *mut SoundIoInStream) -> c_int;
+
+    // If the underyling device supports pausing, this pauses the stream and
+    // prevents SoundIoInStream::read_callback from being called. Otherwise this returns
+    // #SoundIoErrorIncompatibleDevice.
+    // This function may be called from any thread.
+    // Pausing when already paused or unpausing when already unpaused has no
+    // effect and always returns #SoundIoErrorNone.
+    //
+    // Possible errors:
+    // * #SoundIoErrorBackendDisconnected
+    // * #SoundIoErrorStreaming
+    // * #SoundIoErrorIncompatibleDevice - device does not support pausing/unpausing
+    pub fn soundio_instream_pause(instream: *mut SoundIoInStream, pause: c_bool) -> c_int;
+
+    // Obtain the number of seconds that the next frame of sound being
+    // captured will take to arrive in the buffer, plus the amount of time that is
+    // represented in the buffer. This includes both software and hardware latency.
+    //
+    // This function must be called only from within SoundIoInStream::read_callback.
+    //
+    // Possible errors:
+    // * #SoundIoErrorStreaming
+    pub fn soundio_instream_get_latency(
+        instream: *mut SoundIoInStream,
+        out_latency: *mut c_double,
+    ) -> c_int;
+
+    // A ring buffer is a single-reader single-writer lock-free fixed-size queue.
+    // libsoundio ring buffers use memory mapping techniques to enable a
+    // contiguous buffer when reading or writing across the boundary of the ring
+    // buffer's capacity.
+
+    // Enum is defined above. See https://github.com/rust-lang/rust/issues/27303
+    // struct SoundIoRingBuffer;
+
+    // `requested_capacity` in bytes.
+    // Returns `NULL` if and only if memory could not be allocated.
+    // Use ::soundio_ring_buffer_capacity to get the actual capacity, which might
+    // be greater for alignment purposes.
+    // See also ::soundio_ring_buffer_destroy
+    pub fn soundio_ring_buffer_create(
+        soundio: *mut SoundIo,
+        requested_capacity: c_int,
+    ) -> *mut SoundIoRingBuffer;
+    pub fn soundio_ring_buffer_destroy(ring_buffer: *mut SoundIoRingBuffer);
+
+    // When you create a ring buffer, capacity might be more than the requested
+    // capacity for alignment purposes. This function returns the actual capacity.
+    pub fn soundio_ring_buffer_capacity(ring_buffer: *mut SoundIoRingBuffer) -> c_int;
+
+    // Do not write more than capacity.
+    pub fn soundio_ring_buffer_write_ptr(ring_buffer: *mut SoundIoRingBuffer) -> *mut c_char;
+    // `count` in bytes.
+    pub fn soundio_ring_buffer_advance_write_ptr(ring_buffer: *mut SoundIoRingBuffer, count: c_int);
+
+    // Do not read more than capacity.
+    pub fn soundio_ring_buffer_read_ptr(ring_buffer: *mut SoundIoRingBuffer) -> *mut c_char;
+    // `count` in bytes.
+    pub fn soundio_ring_buffer_advance_read_ptr(ring_buffer: *mut SoundIoRingBuffer, count: c_int);
+
+    // Returns how many bytes of the buffer is used, ready for reading.
+    pub fn soundio_ring_buffer_fill_count(ring_buffer: *mut SoundIoRingBuffer) -> c_int;
+
+    // Returns how many bytes of the buffer is free, ready for writing.
+    pub fn soundio_ring_buffer_free_count(ring_buffer: *mut SoundIoRingBuffer) -> c_int;
+
+    // Must be called by the writer.
+    pub fn soundio_ring_buffer_clear(ring_buffer: *mut SoundIoRingBuffer);
+
 }
-
-extern {
-		
-	// See also ::soundio_version_major, ::soundio_version_minor, ::soundio_version_patch
-	pub fn soundio_version_string() -> *const c_char;
-	// See also ::soundio_version_string, ::soundio_version_minor, ::soundio_version_patch
-	pub fn soundio_version_major() -> c_int;
-	// See also ::soundio_version_major, ::soundio_version_string, ::soundio_version_patch
-	pub fn soundio_version_minor() -> c_int;
-	// See also ::soundio_version_major, ::soundio_version_minor, ::soundio_version_string
-	pub fn soundio_version_patch() -> c_int;
-
-	// Create a SoundIo context. You may create multiple instances of this to
-	// connect to multiple backends. Sets all fields to defaults.
-	// Returns `NULL` if and only if memory could not be allocated.
-	// See also ::soundio_destroy
-	pub fn soundio_create() -> *mut SoundIo;
-	pub fn soundio_destroy(soundio: *mut SoundIo);
-
-
-	// Tries ::soundio_connect_backend on all available backends in order.
-	// Possible errors:
-	// * #SoundIoErrorInvalid - already connected
-	// * #SoundIoErrorNoMem
-	// * #SoundIoErrorSystemResources
-	// * #SoundIoErrorNoSuchClient - when JACK returns `JackNoSuchClient`
-	// See also ::soundio_disconnect
-	pub fn soundio_connect(soundio: *mut SoundIo) -> c_int;
-	// Instead of calling ::soundio_connect you may call this function to try a
-	// specific backend.
-	// Possible errors:
-	// * #SoundIoErrorInvalid - already connected or invalid backend parameter
-	// * #SoundIoErrorNoMem
-	// * #SoundIoErrorBackendUnavailable - backend was not compiled in
-	// * #SoundIoErrorSystemResources
-	// * #SoundIoErrorNoSuchClient - when JACK returns `JackNoSuchClient`
-	// * #SoundIoErrorInitAudioBackend - requested `backend` is not active
-	// * #SoundIoErrorBackendDisconnected - backend disconnected while connecting
-	// See also ::soundio_disconnect
-	pub fn soundio_connect_backend(soundio: *mut SoundIo, backend: SoundIoBackend) -> c_int;
-	pub fn soundio_disconnect(soundio: *mut SoundIo);
-
-	// Get a string representation of a #SoundIoError
-	pub fn soundio_strerror(error: c_int) -> *const c_char;
-	// Get a string representation of a #SoundIoBackend
-	pub fn soundio_backend_name(backend: SoundIoBackend) -> *const c_char;
-
-	// Returns the number of available backends.
-	pub fn soundio_backend_count(soundio: *mut SoundIo) -> c_int;
-	// get the available backend at the specified index
-	// (0 <= index < ::soundio_backend_count)
-	pub fn soundio_get_backend(soundio: *mut SoundIo, index: c_int) -> SoundIoBackend;
-
-	// Returns whether libsoundio was compiled with backend.
-	pub fn soundio_have_backend(backend: SoundIoBackend) -> c_bool;
-
-	// Atomically update information for all connected devices. Note that calling
-	// this function merely flips a pointer; the actual work of collecting device
-	// information is done elsewhere. It is performant to call this function many
-	// times per second.
-	//
-	// When you call this, the following callbacks might be called:
-	// * SoundIo::on_devices_change
-	// * SoundIo::on_backend_disconnect
-	// This is the only time those callbacks can be called.
-	//
-	// This must be called from the same thread as the thread in which you call
-	// these functions:
-	// * ::soundio_input_device_count
-	// * ::soundio_output_device_count
-	// * ::soundio_get_input_device
-	// * ::soundio_get_output_device
-	// * ::soundio_default_input_device_index
-	// * ::soundio_default_output_device_index
-	//
-	// Note that if you do not care about learning about updated devices, you
-	// might call this function only once ever and never call
-	// ::soundio_wait_events.
-	pub fn soundio_flush_events(soundio: *mut SoundIo);
-
-	// This function calls ::soundio_flush_events then blocks until another event
-	// is ready or you call ::soundio_wakeup. Be ready for spurious wakeups.
-	pub fn soundio_wait_events(soundio: *mut SoundIo);
-
-	// Makes ::soundio_wait_events stop blocking.
-	pub fn soundio_wakeup(soundio: *mut SoundIo);
-
-
-	// If necessary you can manually trigger a device rescan. Normally you will
-	// not ever have to call this function, as libsoundio listens to system events
-	// for device changes and responds to them by rescanning devices and preparing
-	// the new device information for you to be atomically replaced when you call
-	// ::soundio_flush_events. However you might run into cases where you want to
-	// force trigger a device rescan, for example if an ALSA device has a
-	// SoundIoDevice::probe_error.
-	//
-	// After you call this you still have to use ::soundio_flush_events or
-	// ::soundio_wait_events and then wait for the
-	// SoundIo::on_devices_change callback.
-	//
-	// This can be called from any thread context except for
-	// SoundIoOutStream::write_callback and SoundIoInStream::read_callback
-	pub fn soundio_force_device_scan(soundio: *mut SoundIo);
-
-
-	// Channel Layouts
-
-	// Returns whether the channel count field and each channel id matches in
-	// the supplied channel layouts.
-	pub fn soundio_channel_layout_equal(
-			a: *mut SoundIoChannelLayout,
-			b: *mut SoundIoChannelLayout) -> c_bool;
-
-	pub fn soundio_get_channel_name(id: SoundIoChannelId) -> *const c_char;
-	// Given UTF-8 encoded text which is the name of a channel such as
-	// "Front Left", "FL", or "front-left", return the corresponding
-	// SoundIoChannelId. Returns SoundIoChannelIdInvalid for no match.
-	pub fn soundio_parse_channel_id(str: *const c_char, str_len: c_int) -> SoundIoChannelId;
-
-	// Returns the number of builtin channel layouts.
-	pub fn soundio_channel_layout_builtin_count() -> c_int;
-	// Returns a builtin channel layout. 0 <= `index` < ::soundio_channel_layout_builtin_count
-	//
-	// Although `index` is of type `int`, it should be a valid
-	// #SoundIoChannelLayoutId enum value.
-	pub fn soundio_channel_layout_get_builtin(index: c_int) -> *const SoundIoChannelLayout;
-
-	// Get the default builtin channel layout for the given number of channels.
-	pub fn soundio_channel_layout_get_default(channel_count: c_int) -> *const SoundIoChannelLayout;
-
-	// Return the index of `channel` in `layout`, or `-1` if not found.
-	pub fn soundio_channel_layout_find_channel(
-			layout: *const SoundIoChannelLayout, channel: SoundIoChannelId) -> c_int;
-
-	// Populates the name field of layout if it matches a builtin one.
-	// returns whether it found a match
-	pub fn soundio_channel_layout_detect_builtin(layout: *mut SoundIoChannelLayout) -> c_bool;
-
-	// Iterates over preferred_layouts. Returns the first channel layout in
-	// preferred_layouts which matches one of the channel layouts in
-	// available_layouts. Returns NULL if none matches.
-	pub fn soundio_best_matching_channel_layout(
-			preferred_layouts: *const SoundIoChannelLayout, preferred_layout_count: c_int,
-			available_layouts: *const SoundIoChannelLayout, available_layout_count: c_int) -> *const SoundIoChannelLayout;
-
-	// Sorts by channel count, descending.
-	pub fn soundio_sort_channel_layouts(layout: *mut SoundIoChannelLayout, layout_count: c_int);
-
-	// Sample Formats
-
-	// Returns -1 on invalid format.
-	pub fn soundio_get_bytes_per_sample(format: SoundIoFormat) -> c_int;
-
-	// A frame is one sample per channel.
-	// static inline int soundio_get_bytes_per_frame(enum SoundIoFormat format, channel_count: c_int) {
-	// 	return soundio_get_bytes_per_sample(format) * channel_count;
-	// }
-
-	// Sample rate is the number of frames per second.
-	// static inline int soundio_get_bytes_per_second(enum SoundIoFormat format,
-	// 		channel_count: c_int, int sample_rate)
-	// {
-	// 	return soundio_get_bytes_per_frame(format, channel_count) * sample_rate;
-	// }
-
-	// Returns string representation of `format`.
-	pub fn soundio_format_string(format: SoundIoFormat) -> *const c_char;
-
-
-
-
-	// Devices
-
-	// When you call ::soundio_flush_events, a snapshot of all device state is
-	// saved and these functions merely access the snapshot data. When you want
-	// to check for new devices, call ::soundio_flush_events. Or you can call
-	// ::soundio_wait_events to block until devices change. If an error occurs
-	// scanning devices in a background thread, SoundIo::on_backend_disconnect is called
-	// with the error code.
-
-	// Get the number of input devices.
-	// Returns -1 if you never called ::soundio_flush_events.
-	pub fn soundio_input_device_count(soundio: *mut SoundIo) -> c_int;
-	// Get the number of output devices.
-	// Returns -1 if you never called ::soundio_flush_events.
-	pub fn soundio_output_device_count(soundio: *mut SoundIo) -> c_int;
-
-	// Always returns a device. Call ::soundio_device_unref when done.
-	// `index` must be 0 <= index < ::soundio_input_device_count
-	// Returns NULL if you never called ::soundio_flush_events or if you provide
-	// invalid parameter values.
-	pub fn soundio_get_input_device(soundio: *mut SoundIo, index: c_int) -> *mut SoundIoDevice;
-	// Always returns a device. Call ::soundio_device_unref when done.
-	// `index` must be 0 <= index < ::soundio_output_device_count
-	// Returns NULL if you never called ::soundio_flush_events or if you provide
-	// invalid parameter values.
-	pub fn soundio_get_output_device(soundio: *mut SoundIo, index: c_int) -> *mut SoundIoDevice;
-
-	// returns the index of the default input device
-	// returns -1 if there are no devices or if you never called
-	// ::soundio_flush_events.
-	pub fn soundio_default_input_device_index(soundio: *mut SoundIo) -> c_int;
-
-	// returns the index of the default output device
-	// returns -1 if there are no devices or if you never called
-	// ::soundio_flush_events.
-	pub fn soundio_default_output_device_index(soundio: *mut SoundIo) -> c_int;
-
-	// Add 1 to the reference count of `device`.
-	pub fn soundio_device_ref(device: *mut SoundIoDevice);
-	// Remove 1 to the reference count of `device`. Clean up if it was the last
-	// reference.
-	pub fn soundio_device_unref(device: *mut SoundIoDevice);
-
-	// Return `true` if and only if the devices have the same SoundIoDevice::id,
-	// SoundIoDevice::is_raw, and SoundIoDevice::aim are the same.
-	pub fn soundio_device_equal(
-			a: *const SoundIoDevice,
-			b: *const SoundIoDevice) -> c_bool;
-
-	// Sorts channel layouts by channel count, descending.
-	pub fn soundio_device_sort_channel_layouts(device: *mut SoundIoDevice);
-
-	// Convenience function. Returns whether `format` is included in the device's
-	// supported formats.
-	pub fn soundio_device_supports_format(device: *mut SoundIoDevice,
-			format: SoundIoFormat) -> c_bool;
-
-	// Convenience function. Returns whether `layout` is included in the device's
-	// supported channel layouts.
-	pub fn soundio_device_supports_layout(device: *mut SoundIoDevice,
-			layout: *const SoundIoChannelLayout) -> c_bool;
-
-	// Convenience function. Returns whether `sample_rate` is included in the
-	// device's supported sample rates.
-	pub fn soundio_device_supports_sample_rate(device: *mut SoundIoDevice,
-			sample_rate: c_int) -> c_bool;
-
-	// Convenience function. Returns the available sample rate nearest to
-	// `sample_rate`, rounding up.
-	pub fn soundio_device_nearest_sample_rate(device: *mut SoundIoDevice,
-			sample_rate: c_int) -> c_int;
-
-
-
-	// Output Streams
-	// Allocates memory and sets defaults. Next you should fill out the struct fields
-	// and then call ::soundio_outstream_open. Sets all fields to defaults.
-	// Returns `NULL` if and only if memory could not be allocated.
-	// See also ::soundio_outstream_destroy
-	pub fn soundio_outstream_create(device: *mut SoundIoDevice) -> *mut SoundIoOutStream;
-	// You may not call this function from the SoundIoOutStream::write_callback thread context.
-	pub fn soundio_outstream_destroy(outstream: *mut SoundIoOutStream);
-
-	// After you call this function, SoundIoOutStream::software_latency is set to
-	// the correct value.
-	//
-	// The next thing to do is call ::soundio_instream_start.
-	// If this function returns an error, the outstream is in an invalid state and
-	// you must call ::soundio_outstream_destroy on it.
-	//
-	// Possible errors:
-	// * #SoundIoErrorInvalid
-	//   * SoundIoDevice::aim is not #SoundIoDeviceAimOutput
-	//   * SoundIoOutStream::format is not valid
-	//   * SoundIoOutStream::channel_count is greater than #SOUNDIO_MAX_CHANNELS
-	// * #SoundIoErrorNoMem
-	// * #SoundIoErrorOpeningDevice
-	// * #SoundIoErrorBackendDisconnected
-	// * #SoundIoErrorSystemResources
-	// * #SoundIoErrorNoSuchClient - when JACK returns `JackNoSuchClient`
-	// * #SoundIoErrorOpeningDevice
-	// * #SoundIoErrorIncompatibleBackend - SoundIoOutStream::channel_count is
-	//   greater than the number of channels the backend can handle.
-	// * #SoundIoErrorIncompatibleDevice - stream parameters requested are not
-	//   compatible with the chosen device.
-	pub fn soundio_outstream_open(outstream: *mut SoundIoOutStream) -> c_int;
-
-	// After you call this function, SoundIoOutStream::write_callback will be called.
-	//
-	// This function might directly call SoundIoOutStream::write_callback.
-	//
-	// Possible errors:
-	// * #SoundIoErrorStreaming
-	// * #SoundIoErrorNoMem
-	// * #SoundIoErrorSystemResources
-	// * #SoundIoErrorBackendDisconnected
-	pub fn soundio_outstream_start(outstream: *mut SoundIoOutStream) -> c_int;
-
-	// Call this function when you are ready to begin writing to the device buffer.
-	//  * `outstream` - (in) The output stream you want to write to.
-	//  * `areas` - (out) The memory addresses you can write data to, one per
-	//    channel. It is OK to modify the pointers if that helps you iterate.
-	//  * `frame_count` - (in/out) Provide the number of frames you want to write.
-	//    Returned will be the number of frames you can actually write, which is
-	//    also the number of frames that will be written when you call
-	//    ::soundio_outstream_end_write. The value returned will always be less
-	//    than or equal to the value provided.
-	// It is your responsibility to call this function exactly as many times as
-	// necessary to meet the `frame_count_min` and `frame_count_max` criteria from
-	// SoundIoOutStream::write_callback.
-	// You must call this function only from the SoundIoOutStream::write_callback thread context.
-	// After calling this function, write data to `areas` and then call
-	// ::soundio_outstream_end_write.
-	// If this function returns an error, do not call ::soundio_outstream_end_write.
-	//
-	// Possible errors:
-	// * #SoundIoErrorInvalid
-	//   * `*frame_count` <= 0
-	//   * `*frame_count` < `frame_count_min` or `*frame_count` > `frame_count_max`
-	//   * function called too many times without respecting `frame_count_max`
-	// * #SoundIoErrorStreaming
-	// * #SoundIoErrorUnderflow - an underflow caused this call to fail. You might
-	//   also get a SoundIoOutStream::underflow_callback, and you might not get
-	//   this error code when an underflow occurs. Unlike #SoundIoErrorStreaming,
-	//   the outstream is still in a valid state and streaming can continue.
-	// * #SoundIoErrorIncompatibleDevice - in rare cases it might just now
-	//   be discovered that the device uses non-byte-aligned access, in which
-	//   case this error code is returned.
-	pub fn soundio_outstream_begin_write(outstream: *mut SoundIoOutStream,
-			areas: *mut *mut SoundIoChannelArea, frame_count: *mut c_int) -> c_int;
-
-	// Commits the write that you began with ::soundio_outstream_begin_write.
-	// You must call this function only from the SoundIoOutStream::write_callback thread context.
-	//
-	// Possible errors:
-	// * #SoundIoErrorStreaming
-	// * #SoundIoErrorUnderflow - an underflow caused this call to fail. You might
-	//   also get a SoundIoOutStream::underflow_callback, and you might not get
-	//   this error code when an underflow occurs. Unlike #SoundIoErrorStreaming,
-	//   the outstream is still in a valid state and streaming can continue.
-	pub fn soundio_outstream_end_write(outstream: *mut SoundIoOutStream) -> c_int;
-
-	// Clears the output stream buffer.
-	// This function can be called from any thread.
-	// This function can be called regardless of whether the outstream is paused
-	// or not.
-	// Some backends do not support clearing the buffer. On these backends this
-	// function will return SoundIoErrorIncompatibleBackend.
-	// Some devices do not support clearing the buffer. On these devices this
-	// function might return SoundIoErrorIncompatibleDevice.
-	// Possible errors:
-	//
-	// * #SoundIoErrorStreaming
-	// * #SoundIoErrorIncompatibleBackend
-	// * #SoundIoErrorIncompatibleDevice
-	pub fn soundio_outstream_clear_buffer(outstream: *mut SoundIoOutStream) -> c_int;
-
-	// If the underlying backend and device support pausing, this pauses the
-	// stream. SoundIoOutStream::write_callback may be called a few more times if
-	// the buffer is not full.
-	// Pausing might put the hardware into a low power state which is ideal if your
-	// software is silent for some time.
-	// This function may be called from any thread context, including
-	// SoundIoOutStream::write_callback.
-	// Pausing when already paused or unpausing when already unpaused has no
-	// effect and returns #SoundIoErrorNone.
-	//
-	// Possible errors:
-	// * #SoundIoErrorBackendDisconnected
-	// * #SoundIoErrorStreaming
-	// * #SoundIoErrorIncompatibleDevice - device does not support
-	//   pausing/unpausing. This error code might not be returned even if the
-	//   device does not support pausing/unpausing.
-	// * #SoundIoErrorIncompatibleBackend - backend does not support
-	//   pausing/unpausing.
-	// * #SoundIoErrorInvalid - outstream not opened and started
-	pub fn soundio_outstream_pause(outstream: *mut SoundIoOutStream, pause: c_bool) -> c_int;
-
-	// Obtain the total number of seconds that the next frame written after the
-	// last frame written with ::soundio_outstream_end_write will take to become
-	// audible. This includes both software and hardware latency. In other words,
-	// if you call this function directly after calling ::soundio_outstream_end_write,
-	// this gives you the number of seconds that the next frame written will take
-	// to become audible.
-	//
-	// This function must be called only from within SoundIoOutStream::write_callback.
-	//
-	// Possible errors:
-	// * #SoundIoErrorStreaming
-	pub fn soundio_outstream_get_latency(outstream: *mut SoundIoOutStream,
-			out_latency: *mut c_double) -> c_int;
-
-
-
-	// Input Streams
-	// Allocates memory and sets defaults. Next you should fill out the struct fields
-	// and then call ::soundio_instream_open. Sets all fields to defaults.
-	// Returns `NULL` if and only if memory could not be allocated.
-	// See also ::soundio_instream_destroy
-	pub fn soundio_instream_create(device: *mut SoundIoDevice) -> *mut SoundIoInStream;
-	// You may not call this function from SoundIoInStream::read_callback.
-	pub fn soundio_instream_destroy(instream: *mut SoundIoInStream);
-
-	// After you call this function, SoundIoInStream::software_latency is set to the correct
-	// value.
-	// The next thing to do is call ::soundio_instream_start.
-	// If this function returns an error, the instream is in an invalid state and
-	// you must call ::soundio_instream_destroy on it.
-	//
-	// Possible errors:
-	// * #SoundIoErrorInvalid
-	//   * device aim is not #SoundIoDeviceAimInput
-	//   * format is not valid
-	//   * requested layout channel count > #SOUNDIO_MAX_CHANNELS
-	// * #SoundIoErrorOpeningDevice
-	// * #SoundIoErrorNoMem
-	// * #SoundIoErrorBackendDisconnected
-	// * #SoundIoErrorSystemResources
-	// * #SoundIoErrorNoSuchClient
-	// * #SoundIoErrorIncompatibleBackend
-	// * #SoundIoErrorIncompatibleDevice
-	pub fn soundio_instream_open(instream: *mut SoundIoInStream) -> c_int;
-
-	// After you call this function, SoundIoInStream::read_callback will be called.
-	//
-	// Possible errors:
-	// * #SoundIoErrorBackendDisconnected
-	// * #SoundIoErrorStreaming
-	// * #SoundIoErrorOpeningDevice
-	// * #SoundIoErrorSystemResources
-	pub fn soundio_instream_start(instream: *mut SoundIoInStream) -> c_int;
-
-	// Call this function when you are ready to begin reading from the device
-	// buffer.
-	// * `instream` - (in) The input stream you want to read from.
-	// * `areas` - (out) The memory addresses you can read data from. It is OK
-	//   to modify the pointers if that helps you iterate. There might be a "hole"
-	//   in the buffer. To indicate this, `areas` will be `NULL` and `frame_count`
-	//   tells how big the hole is in frames.
-	// * `frame_count` - (in/out) - Provide the number of frames you want to read;
-	//   returns the number of frames you can actually read. The returned value
-	//   will always be less than or equal to the provided value. If the provided
-	//   value is less than `frame_count_min` from SoundIoInStream::read_callback this function
-	//   returns with #SoundIoErrorInvalid.
-	// It is your responsibility to call this function no more and no fewer than the
-	// correct number of times according to the `frame_count_min` and
-	// `frame_count_max` criteria from SoundIoInStream::read_callback.
-	// You must call this function only from the SoundIoInStream::read_callback thread context.
-	// After calling this function, read data from `areas` and then use
-	// ::soundio_instream_end_read` to actually remove the data from the buffer
-	// and move the read index forward. ::soundio_instream_end_read should not be
-	// called if the buffer is empty (`frame_count` == 0), but it should be called
-	// if there is a hole.
-	//
-	// Possible errors:
-	// * #SoundIoErrorInvalid
-	//   * `*frame_count` < `frame_count_min` or `*frame_count` > `frame_count_max`
-	// * #SoundIoErrorStreaming
-	// * #SoundIoErrorIncompatibleDevice - in rare cases it might just now
-	//   be discovered that the device uses non-byte-aligned access, in which
-	//   case this error code is returned.
-	pub fn soundio_instream_begin_read(instream: *mut SoundIoInStream,
-			areas: *mut *mut SoundIoChannelArea, frame_count: *mut c_int) -> c_int;
-	// This will drop all of the frames from when you called
-	// ::soundio_instream_begin_read.
-	// You must call this function only from the SoundIoInStream::read_callback thread context.
-	// You must call this function only after a successful call to
-	// ::soundio_instream_begin_read.
-	//
-	// Possible errors:
-	// * #SoundIoErrorStreaming
-	pub fn soundio_instream_end_read(instream: *mut SoundIoInStream) -> c_int;
-
-	// If the underyling device supports pausing, this pauses the stream and
-	// prevents SoundIoInStream::read_callback from being called. Otherwise this returns
-	// #SoundIoErrorIncompatibleDevice.
-	// This function may be called from any thread.
-	// Pausing when already paused or unpausing when already unpaused has no
-	// effect and always returns #SoundIoErrorNone.
-	//
-	// Possible errors:
-	// * #SoundIoErrorBackendDisconnected
-	// * #SoundIoErrorStreaming
-	// * #SoundIoErrorIncompatibleDevice - device does not support pausing/unpausing
-	pub fn soundio_instream_pause(instream: *mut SoundIoInStream, pause: c_bool) -> c_int;
-
-	// Obtain the number of seconds that the next frame of sound being
-	// captured will take to arrive in the buffer, plus the amount of time that is
-	// represented in the buffer. This includes both software and hardware latency.
-	//
-	// This function must be called only from within SoundIoInStream::read_callback.
-	//
-	// Possible errors:
-	// * #SoundIoErrorStreaming
-	pub fn soundio_instream_get_latency(instream: *mut SoundIoInStream,
-			out_latency: *mut c_double) -> c_int;
-
-
-	// A ring buffer is a single-reader single-writer lock-free fixed-size queue.
-	// libsoundio ring buffers use memory mapping techniques to enable a
-	// contiguous buffer when reading or writing across the boundary of the ring
-	// buffer's capacity.
-
-	// Enum is defined above. See https://github.com/rust-lang/rust/issues/27303
-	// struct SoundIoRingBuffer;
-
-	// `requested_capacity` in bytes.
-	// Returns `NULL` if and only if memory could not be allocated.
-	// Use ::soundio_ring_buffer_capacity to get the actual capacity, which might
-	// be greater for alignment purposes.
-	// See also ::soundio_ring_buffer_destroy
-	pub fn soundio_ring_buffer_create(soundio: *mut SoundIo, requested_capacity: c_int) -> *mut SoundIoRingBuffer;
-	pub fn soundio_ring_buffer_destroy(ring_buffer: *mut SoundIoRingBuffer);
-
-	// When you create a ring buffer, capacity might be more than the requested
-	// capacity for alignment purposes. This function returns the actual capacity.
-	pub fn soundio_ring_buffer_capacity(ring_buffer: *mut SoundIoRingBuffer) -> c_int;
-
-	// Do not write more than capacity.
-	pub fn soundio_ring_buffer_write_ptr(ring_buffer: *mut SoundIoRingBuffer) -> *mut c_char;
-	// `count` in bytes.
-	pub fn soundio_ring_buffer_advance_write_ptr(ring_buffer: *mut SoundIoRingBuffer, count: c_int);
-
-	// Do not read more than capacity.
-	pub fn soundio_ring_buffer_read_ptr(ring_buffer: *mut SoundIoRingBuffer) -> *mut c_char;
-	// `count` in bytes.
-	pub fn soundio_ring_buffer_advance_read_ptr(ring_buffer: *mut SoundIoRingBuffer, count: c_int);
-
-	// Returns how many bytes of the buffer is used, ready for reading.
-	pub fn soundio_ring_buffer_fill_count(ring_buffer: *mut SoundIoRingBuffer) -> c_int;
-
-	// Returns how many bytes of the buffer is free, ready for writing.
-	pub fn soundio_ring_buffer_free_count(ring_buffer: *mut SoundIoRingBuffer) -> c_int;
-
-	// Must be called by the writer.
-	pub fn soundio_ring_buffer_clear(ring_buffer: *mut SoundIoRingBuffer);
-
-}
-

@@ -4,8 +4,8 @@ version = "0.2.0"
 authors = ["Tim Hutt <tdhutt@gmail.com>"]
 license = "MIT"
 readme = "Readme.md"
-repository = "https://github.com/Timmmm/soundio-rs"
-homepage = "https://github.com/Timmmm/soundio-rs"
+repository = "https://github.com/RamiHg/soundio-rs"
+homepage = "https://github.com/RamiHg/soundio-rs"
 documentation = "https://docs.rs/soundio/"
 description = """
 Bindings to libsoundio for audio input and output.

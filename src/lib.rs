@@ -1,7 +1,7 @@
 //! # soundio-rs
 //!
 //! The soundio-rs crate is a wrapper for [libsoundio](http://libsound.io/).
-//! 
+//!
 //! The API closely follows the libsoundio so it is fairly low level but much safer.
 //! Most of the libsoundio API is exposed.
 //!
@@ -43,11 +43,11 @@
 //! # ctx.connect_backend(soundio::Backend::Dummy).unwrap();
 //! let dev = ctx.default_input_device().expect("No input device");
 //! ```
-//! 
+//!
 //! However *please* don't only use that option. Your users will hate you when they have to work out
 //! how ALSA's undocumented and convoluted `.asoundrc` config systems works just to have your app use
 //! a different sound card.
-//! 
+//!
 //! To let the user select the output device you can make use of `Context::input_devices()` and `Context::output_devices()`.
 //!
 //! Onces the device has been opened, you can query it for supported formats and sample rates.
@@ -138,7 +138,7 @@
 //! # Examples
 //!
 //! ## list_devices
-//! 
+//!
 //! This example is very similar to libsoundio's list_devices example. It simply lists the devices
 //! on the system. It currently has no command line options.
 //!
@@ -150,7 +150,7 @@
 //!
 //! ## player
 //!
-//! The opposite of recorder - it plays a wav file. This also has the flaw of reading the file in 
+//! The opposite of recorder - it plays a wav file. This also has the flaw of reading the file in
 //! the audio callback. Also currently it does not exit when the file ends because I am still learning Rust.
 //!
 //! ## sine
@@ -166,30 +166,30 @@
 
 extern crate libsoundio_sys as raw;
 
-mod types;
+mod backend;
+mod channels;
 mod context;
 mod device;
-mod instream;
-mod outstream;
-mod util;
-mod layout;
 mod error;
-mod channels;
-mod backend;
 mod format;
+mod instream;
+mod layout;
+mod outstream;
 mod sample;
+mod types;
+mod util;
 
-pub use self::types::*;
+pub use self::backend::*;
+pub use self::channels::*;
 pub use self::context::*;
 pub use self::device::*;
-pub use self::instream::*;
-pub use self::outstream::*;
-pub use self::layout::*;
 pub use self::error::*;
-pub use self::channels::*;
-pub use self::backend::*;
 pub use self::format::*;
+pub use self::instream::*;
+pub use self::layout::*;
+pub use self::outstream::*;
 pub use self::sample::*;
+pub use self::types::*;
 
 use self::util::*;
 
@@ -201,7 +201,7 @@ use self::util::*;
 /// println!("libsoundio version: {}", soundio::version_string());
 /// ```
 pub fn version_string() -> String {
-	latin1_to_string( unsafe { raw::soundio_version_string() } )
+    latin1_to_string(unsafe { raw::soundio_version_string() })
 }
 
 /// Return the libsoundio version as a tuple, for exaample `(1, 0, 2)`.
@@ -215,13 +215,13 @@ pub fn version_string() -> String {
 /// }
 /// ```
 pub fn version() -> (i32, i32, i32) {
-	unsafe {
-		(
-			raw::soundio_version_major() as i32,
-			raw::soundio_version_minor() as i32,
-			raw::soundio_version_patch() as i32,
-		)
-	}
+    unsafe {
+        (
+            raw::soundio_version_major() as i32,
+            raw::soundio_version_minor() as i32,
+            raw::soundio_version_patch() as i32,
+        )
+    }
 }
 
 /// Return `true` if libsoundio supports the given `Backend`.
@@ -247,11 +247,8 @@ pub fn version() -> (i32, i32, i32) {
 ///
 /// for &backend in backend_list.iter() {
 /// 	println!("Backend {} available? {}", backend, soundio::have_backend(backend));
-/// } 
+/// }
 /// ```
 pub fn have_backend(backend: Backend) -> bool {
-	unsafe {
-		raw::soundio_have_backend(backend.into()) != 0
-	}
+    unsafe { raw::soundio_have_backend(backend.into()) != 0 }
 }
-

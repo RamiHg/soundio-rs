@@ -5,9 +5,9 @@ version = "0.2.0"
 authors = ["Tim Hutt <tdhutt@gmail.com>"]
 links = "soundio"
 build = "build.rs"
-repository = "https://github.com/Timmmm/soundio-rs"
+repository = "https://github.com/RamiHg/soundio-rs"
 license = "MIT"
-description = "Native bindings to the libsoundio library"
+description = "Native bindings to the libsoundio library."
 keywords = ["audio", "media", "soundio"]
 categories = ["multimedia", "multimedia::audio"]
 
@@ -20,6 +20,6 @@ libc = "0.2"
 
 [build-dependencies]
 pkg-config = "0.3"
-cmake = "0.1.40"
-cc = "1.0.37"
+cmake = "0.1"
+cc = "1.0"
 
