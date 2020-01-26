@@ -1,9 +1,9 @@
 [package]
 name = "soundio"
-version = "0.2.0"
-authors = ["Tim Hutt <tdhutt@gmail.com>"]
+version = "0.2.1"
+authors = ["Tim Hutt <tdhutt@gmail.com>", "Ramy <RamiHg@users.noreply.github.com>"]
 license = "MIT"
-readme = "Readme.md"
+readme = "README.md"
 repository = "https://github.com/RamiHg/soundio-rs"
 homepage = "https://github.com/RamiHg/soundio-rs"
 documentation = "https://docs.rs/soundio/"
@@ -15,7 +15,7 @@ categories = ["multimedia", "multimedia::audio"]
 
 [dependencies]
 libc = "0.2"
-libsoundio-sys = { path = "libsoundio-sys", version = "0.2.0" }
+libsoundio-sys = { path = "libsoundio-sys", version = "0.3.0" }
 
 # Examples
 
@@ -42,3 +42,5 @@ hound = "3.0.0"
 [badges]
 travis-ci = { repository = "https://github.com/Timmmm/soundio-rs", branch = "master" }
 appveyor = { repository = "https://github.com/Timmmm/soundio-rs", branch = "master", service = "github" }
+
+maintenance = { status = "actively-developed" }
