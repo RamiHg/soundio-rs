@@ -19,7 +19,7 @@ use std::os::raw::c_char;
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use std::os::raw::c_char;
 /// let latin1: Vec<c_char> = "£µ±«\0".chars().map(|c| c as c_char).collect();
 /// assert_eq!(soundio::latin1_to_string(latin1.as_ptr()), "£µ±«")

@@ -7,7 +7,6 @@ use std::fs::File;
 use std::io;
 use std::io::BufReader;
 
-
 // Maybe the best way to do this is something like:
 //
 // let (write_callback, wav_player) = WavPlayer::new();
@@ -54,10 +53,6 @@ impl WavPlayer {
         if self.finished != was_finished {
             //		stream.wakeup();
         }
-    }
-
-    fn finished(&self) -> bool {
-        self.finished
     }
 }
 

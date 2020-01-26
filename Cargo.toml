@@ -14,7 +14,6 @@ keywords = ["audio", "media", "soundio"]
 categories = ["multimedia", "multimedia::audio"]
 
 [dependencies]
-libc = "0.2"
 libsoundio-sys = { path = "libsoundio-sys", version = "0.3.0" }
 
 # Examples
@@ -35,7 +34,7 @@ path = "examples/list_devices/main.rs"
 name = "sine"
 path = "examples/sine/main.rs"
 
-[dev_dependencies]
+[dev-dependencies]
 crossbeam = "0.2.10"
 hound = "3.0.0"
 

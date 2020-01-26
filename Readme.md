@@ -13,3 +13,11 @@ in `libsoundio-sys` are complete.
 There is another Rust wrapper for libsoundio [here](https://github.com/klingtnet/rsoundio).
 
 This project is a fork of, and was originally created by [Timmmm](https://github.com/Timmmm/soundio-rs). The project now lives here, and is under active development again.
+
+## Changelog
+
+## 0.2.1
+
+- Updated to latest version of libsoundio-sys.
+- Fixed hang with CoreAudio if creating context then immediately destroying it.
+- Fixed Rust 1.40 clippy warnings.

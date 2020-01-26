@@ -263,7 +263,11 @@ impl<'a> Context<'a> {
     pub fn connect(&mut self) -> Result<()> {
         let ret = unsafe { raw::soundio_connect(self.soundio) };
         match ret {
-            0 => Ok(()),
+            0 => {
+                // Immediately flush events (see comment in connect_backend).
+                self.flush_events();
+                Ok(())
+            }
             _ => Err(ret.into()),
         }
     }
@@ -293,7 +297,12 @@ impl<'a> Context<'a> {
     pub fn connect_backend(&mut self, backend: Backend) -> Result<()> {
         let ret = unsafe { raw::soundio_connect_backend(self.soundio, backend.into()) };
         match ret {
-            0 => Ok(()),
+            0 => {
+                // Immediately flush events in order to prevent race condition in libsoundio if
+                // context is then destroyed.
+                self.flush_events();
+                Ok(())
+            }
             _ => Err(ret.into()),
         }
     }
@@ -692,7 +701,7 @@ mod tests {
     #[test]
     fn connect_default_backend() {
         let mut ctx = Context::new();
-        match ctx.connect_backend(Backend::Dummy) {
+        match ctx.connect() {
             Ok(()) => println!("Connected to {}", ctx.current_backend()),
             Err(e) => println!("Couldn't connect: {}", e),
         }
