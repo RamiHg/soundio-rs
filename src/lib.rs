@@ -169,6 +169,8 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(unused_variables)]
+#![allow(unused_imports)]
 
 extern crate libsoundio_sys as raw;
 
@@ -177,13 +179,14 @@ mod channels;
 mod context;
 mod device;
 mod error;
-mod format;
-mod instream;
+//mod instream;
 mod layout;
 mod outstream;
-mod sample;
 mod types;
 mod util;
+
+pub mod format;
+mod stream;
 
 pub use self::backend::*;
 pub use self::channels::*;
@@ -191,11 +194,11 @@ pub use self::context::*;
 pub use self::device::*;
 pub use self::error::*;
 pub use self::format::*;
-pub use self::instream::*;
+// pub use self::instream::*;
 pub use self::layout::*;
-pub use self::outstream::*;
-pub use self::sample::*;
 pub use self::types::*;
+
+pub use stream::StreamOptions;
 
 use self::util::*;
 

@@ -1,5 +1,6 @@
 [package]
 name = "soundio"
+edition = "2018"
 version = "0.2.1"
 authors = ["Tim Hutt <tdhutt@gmail.com>", "Ramy <RamiHg@users.noreply.github.com>"]
 license = "MIT"
@@ -15,24 +16,25 @@ categories = ["multimedia", "multimedia::audio"]
 
 [dependencies]
 libsoundio-sys = { path = "libsoundio-sys", version = "0.3.0" }
+sample = "0.10.0"
 
 # Examples
 
-[[example]]
-name = "player"
-path = "examples/player/main.rs"
+# [[example]]
+# name = "player"
+# path = "examples/player/main.rs"
 
-[[example]]
-name = "recorder"
-path = "examples/recorder/main.rs"
+# [[example]]
+# name = "recorder"
+# path = "examples/recorder/main.rs"
 
-[[example]]
-name = "list_devices"
-path = "examples/list_devices/main.rs"
+# [[example]]
+# name = "list_devices"
+# path = "examples/list_devices/main.rs"
 
-[[example]]
-name = "sine"
-path = "examples/sine/main.rs"
+# [[example]]
+# name = "sine"
+# path = "examples/sine/main.rs"
 
 [dev-dependencies]
 crossbeam = "0.2.10"

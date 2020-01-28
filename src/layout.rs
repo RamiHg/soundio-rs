@@ -388,3 +388,15 @@ impl From<ChannelLayoutId> for raw::SoundIoChannelLayoutId {
         }
     }
 }
+
+pub trait HasDefaultLayout {
+    const DEFAULT_LAYOUT: ChannelLayoutId;
+}
+
+impl<T: sample::Sample> HasDefaultLayout for [T; 1] {
+    const DEFAULT_LAYOUT: ChannelLayoutId = ChannelLayoutId::Mono;
+}
+
+impl<T: sample::Sample> HasDefaultLayout for [T; 2] {
+    const DEFAULT_LAYOUT: ChannelLayoutId = ChannelLayoutId::Stereo;
+}

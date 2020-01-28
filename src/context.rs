@@ -4,8 +4,9 @@ use super::backend::*;
 use super::device::*;
 use super::error::*;
 
-use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int};
+
+use std::rc::Rc;
 
 /// `Context` represents the libsoundio library context.
 ///
@@ -21,21 +22,23 @@ use std::os::raw::{c_char, c_int};
 /// ```
 /// let mut ctx = soundio::Context::new();
 /// ```
-pub struct Context<'a> {
+struct ContextData {
     /// The soundio library instance.
     soundio: *mut raw::SoundIo,
     /// The app name, used by some backends.
-    app_name: String,
+    // app_name: String,
     /// The optional callbacks. They are boxed so that we can take a raw pointer
     /// to the heap object and give use it as `void* userdata`.
-    userdata: Box<ContextUserData<'a>>,
+    userdata: Box<ContextUserData>,
 }
 
+pub struct Context(Rc<ContextData>);
+
 // The callbacks required for a context are stored in this object.
-pub struct ContextUserData<'a> {
-    backend_disconnect_callback: Option<Box<dyn FnMut(Error) + 'a>>,
-    devices_change_callback: Option<Box<dyn FnMut() + 'a>>,
-    events_signal_callback: Option<Box<dyn FnMut() + 'a>>,
+pub struct ContextUserData {
+    backend_disconnect_callback: Option<Box<dyn FnMut(Error)>>,
+    devices_change_callback: Option<Box<dyn FnMut()>>,
+    events_signal_callback: Option<Box<dyn FnMut()>>,
 }
 
 // See `Context::new_with_callbacks()`.
@@ -91,7 +94,7 @@ extern "C" fn on_events_signal(sio: *mut raw::SoundIo) {
 #[allow(dead_code)]
 extern "C" fn emit_rtprio_warning() {}
 
-impl<'a> Context<'a> {
+impl Default for Context {
     /// Create a new libsoundio context.
     ///
     /// This panics if libsoundio fails to create the context object. This only happens due to out-of-memory conditions
@@ -104,42 +107,12 @@ impl<'a> Context<'a> {
     /// ```
     /// let mut ctx = soundio::Context::new();
     /// ```
-    pub fn new() -> Context<'a> {
-        let soundio = unsafe { raw::soundio_create() };
-        if soundio.is_null() {
-            panic!("soundio_create() failed (out of memory).");
-        }
-
-        let mut context = Context {
-            soundio,
-            // The default name in libsoundio is "SoundIo". We replicate that here for `Context::app_name()`.
-            app_name: "SoundIo".to_string(),
-            userdata: Box::new(ContextUserData {
-                backend_disconnect_callback: None,
-                devices_change_callback: None,
-                events_signal_callback: None,
-            }),
-        };
-
-        // Note that libsoundio's default on_backend_disconnect() handler panics!
-        // That may actually be reasonable behaviour. I'm not sure under which conditions
-        // disconnects occur.
-        unsafe {
-            (*context.soundio).on_backend_disconnect = Some(on_backend_disconnect);
-            (*context.soundio).on_devices_change = Some(on_devices_change);
-            (*context.soundio).on_events_signal = Some(on_events_signal);
-            // (*context.soundio).app_name is already set by default to point to a static C string "SoundIo".
-
-            // This callback is not used - see its documentation for more information.
-            // (*context.soundio).emit_rtprio_warning = emit_rtprio_warning as *mut _;
-
-            // Save a reference here so that we can have user-defined callbacks.
-            (*context.soundio).userdata =
-                context.userdata.as_mut() as *mut ContextUserData as *mut _;
-        }
-        context
+    fn default() -> Context {
+        Context::with_callbacks(None, None, None)
     }
+}
 
+impl Context {
     /// Create a new libsoundio context with some callbacks specified.
     ///
     /// This is the same as `Context::new()` but allows you to specify the following optional callbacks.
@@ -186,60 +159,75 @@ impl<'a> Context<'a> {
     ///     None::<fn()>,
     /// );
     /// ```
-    pub fn new_with_callbacks<BackendDisconnectCB, DevicesChangeCB, EventsSignalCB>(
-        backend_disconnect_callback: Option<BackendDisconnectCB>,
-        devices_change_callback: Option<DevicesChangeCB>,
-        events_signal_callback: Option<EventsSignalCB>,
-    ) -> Context<'a>
-    where
-        BackendDisconnectCB: 'a + FnMut(Error),
-        DevicesChangeCB: 'a + FnMut(),
-        EventsSignalCB: 'a + FnMut(),
-    {
-        // A set of function like `fn set_XX_callback(&mut self, ...` might be a nicer interface
-        // but I am unsure about the safety implications.
-        let mut context = Context::new();
+    pub fn with_callbacks(
+        backend_disconnect_callback: Option<Box<dyn FnMut(Error)>>,
+        devices_change_callback: Option<Box<dyn FnMut()>>,
+        events_signal_callback: Option<Box<dyn FnMut()>>,
+    ) -> Context {
+        let soundio = unsafe { raw::soundio_create() };
+        if soundio.is_null() {
+            panic!("soundio_create() failed (out of memory).");
+        }
 
-        if let Some(cb) = backend_disconnect_callback {
-            context.userdata.backend_disconnect_callback = Some(Box::new(cb));
-        }
-        if let Some(cb) = devices_change_callback {
-            context.userdata.devices_change_callback = Some(Box::new(cb));
-        }
-        if let Some(cb) = events_signal_callback {
-            context.userdata.events_signal_callback = Some(Box::new(cb));
+        let mut context = Context(Rc::new(ContextData {
+            soundio,
+            // The default name in libsoundio is "SoundIo". We replicate that here for `Context::app_name()`.
+            // app_name: "SoundIo".to_string(),
+            userdata: Box::new(ContextUserData {
+                backend_disconnect_callback,
+                devices_change_callback,
+                events_signal_callback,
+            }),
+        }));
+
+        // Note that libsoundio's default on_backend_disconnect() handler panics!
+        // That may actually be reasonable behaviour. I'm not sure under which conditions
+        // disconnects occur.
+        unsafe {
+            let context = &mut context.0;
+            (*context.soundio).on_backend_disconnect = Some(on_backend_disconnect);
+            (*context.soundio).on_devices_change = Some(on_devices_change);
+            (*context.soundio).on_events_signal = Some(on_events_signal);
+            // (*context.soundio).app_name is already set by default to point to a static C string "SoundIo".
+
+            // This callback is not used - see its documentation for more information.
+            // (*context.soundio).emit_rtprio_warning = emit_rtprio_warning as *mut _;
+
+            // Save a reference here so that we can have user-defined callbacks.
+            (*context.soundio).userdata =
+                context.userdata.as_ref() as *const ContextUserData as *mut _;
         }
 
         context
     }
 
-    /// Set the app name. This is shown in JACK and PulseAudio. Any colons are removed. The default is "SoundIo".
-    ///
-    /// This must be called before you connect to a backend.
-    ///
-    /// ```
-    /// let mut ctx = soundio::Context::new();
-    /// ctx.set_app_name("My App");
-    /// ```
-    pub fn set_app_name(&mut self, name: &str) {
-        self.app_name = name.chars().filter(|&x| x != ':').collect();
-        unsafe {
-            (*self.soundio).app_name = self.app_name.as_ptr() as *mut c_char;
-        }
-    }
+    // /// Set the app name. This is shown in JACK and PulseAudio. Any colons are removed. The default is "SoundIo".
+    // ///
+    // /// This must be called before you connect to a backend.
+    // ///
+    // /// ```
+    // /// let mut ctx = soundio::Context::new();
+    // /// ctx.set_app_name("My App");
+    // /// ```
+    // pub fn set_app_name(&mut self, name: &str) {
+    //     self.app_name = name.chars().filter(|&x| x != ':').collect();
+    //     unsafe {
+    //         (*self.soundio).app_name = self.app_name.as_ptr() as *mut c_char;
+    //     }
+    // }
 
-    /// Get the app name previously set by `set_app_name()`.
-    /// The default is "SoundIo".
-    ///
-    /// ```
-    /// let mut ctx = soundio::Context::new();
-    /// assert_eq!(ctx.app_name(), "SoundIo");
-    /// ctx.set_app_name(":::My App:::");
-    /// assert_eq!(ctx.app_name(), "My App");
-    /// ```
-    pub fn app_name(&self) -> String {
-        self.app_name.clone()
-    }
+    // /// Get the app name previously set by `set_app_name()`.
+    // /// The default is "SoundIo".
+    // ///
+    // /// ```
+    // /// let mut ctx = soundio::Context::new();
+    // /// assert_eq!(ctx.app_name(), "SoundIo");
+    // /// ctx.set_app_name(":::My App:::");
+    // /// assert_eq!(ctx.app_name(), "My App");
+    // /// ```
+    // pub fn app_name(&self) -> String {
+    //     self.app_name.clone()
+    // }
 
     /// Connect to the default backend, trying them in the order returned by `available_backends()`.
     /// It will fail with `Error::Invalid` if this instance is already connected to a backend.
@@ -260,8 +248,8 @@ impl<'a> Context<'a> {
     /// 	Err(e) => println!("Couldn't connect: {}", e),
     /// }
     /// ```
-    pub fn connect(&mut self) -> Result<()> {
-        let ret = unsafe { raw::soundio_connect(self.soundio) };
+    pub fn connect(&self) -> Result<()> {
+        let ret = unsafe { raw::soundio_connect(self.0.soundio) };
         match ret {
             0 => {
                 // Immediately flush events (see comment in connect_backend).
@@ -295,7 +283,7 @@ impl<'a> Context<'a> {
     /// }
     /// ```
     pub fn connect_backend(&mut self, backend: Backend) -> Result<()> {
-        let ret = unsafe { raw::soundio_connect_backend(self.soundio, backend.into()) };
+        let ret = unsafe { raw::soundio_connect_backend(self.0.soundio, backend.into()) };
         match ret {
             0 => {
                 // Immediately flush events in order to prevent race condition in libsoundio if
@@ -323,7 +311,7 @@ impl<'a> Context<'a> {
     /// ```
     pub fn disconnect(&mut self) {
         unsafe {
-            raw::soundio_disconnect(self.soundio);
+            raw::soundio_disconnect(self.0.soundio);
         }
     }
 
@@ -341,7 +329,7 @@ impl<'a> Context<'a> {
     /// }
     /// ```
     pub fn current_backend(&self) -> Backend {
-        unsafe { (*self.soundio).current_backend.into() }
+        unsafe { (*self.0.soundio).current_backend.into() }
     }
 
     /// Return a list of available backends on this system.
@@ -353,10 +341,10 @@ impl<'a> Context<'a> {
     /// println!("Available backends: {:?}", ctx.available_backends());
     /// ```
     pub fn available_backends(&self) -> Vec<Backend> {
-        let count = unsafe { raw::soundio_backend_count(self.soundio) };
+        let count = unsafe { raw::soundio_backend_count(self.0.soundio) };
         let mut backends = Vec::with_capacity(count as usize);
         for i in 0..count {
-            backends.push(unsafe { raw::soundio_get_backend(self.soundio, i).into() });
+            backends.push(unsafe { raw::soundio_get_backend(self.0.soundio, i).into() });
         }
         backends
     }
@@ -382,7 +370,7 @@ impl<'a> Context<'a> {
     /// can call this function only once ever and never call `Context::wait_events()`.
     pub fn flush_events(&self) {
         unsafe {
-            raw::soundio_flush_events(self.soundio);
+            raw::soundio_flush_events(self.0.soundio);
         }
     }
 
@@ -390,7 +378,7 @@ impl<'a> Context<'a> {
     /// is ready or you call `wakeup`. Be ready for spurious wakeups.
     pub fn wait_events(&self) {
         unsafe {
-            raw::soundio_wait_events(self.soundio);
+            raw::soundio_wait_events(self.0.soundio);
         }
     }
 
@@ -404,7 +392,7 @@ impl<'a> Context<'a> {
         // each thread, or maybe one that is Send/Sync and another that isn't. That is rather
         // complicated however and there is probably a better way.
         unsafe {
-            raw::soundio_wakeup(self.soundio);
+            raw::soundio_wakeup(self.0.soundio);
         }
     }
 
@@ -422,7 +410,7 @@ impl<'a> Context<'a> {
     /// This can be called from any thread context except for the read or write callbacks.
     pub fn force_device_scan(&self) {
         unsafe {
-            raw::soundio_force_device_scan(self.soundio);
+            raw::soundio_force_device_scan(self.0.soundio);
         }
     }
 
@@ -446,23 +434,23 @@ impl<'a> Context<'a> {
     ///     println!("Device {} is called {}", i, dev.name());
     /// }
     /// ```
-    pub fn input_device(&self, index: usize) -> Result<Device> {
-        let device = unsafe { raw::soundio_get_input_device(self.soundio, index as c_int) };
-        if device.is_null() {
-            return Err(Error::OpeningDevice);
-        }
+    // pub fn input_device(&self, index: usize) -> Result<Device> {
+    //     let device = unsafe { raw::soundio_get_input_device(self.soundio, index as c_int) };
+    //     if device.is_null() {
+    //         return Err(Error::OpeningDevice);
+    //     }
 
-        let probe_error = unsafe { (*device).probe_error };
+    //     let probe_error = unsafe { (*device).probe_error };
 
-        if probe_error != 0 {
-            return Err(probe_error.into());
-        }
+    //     if probe_error != 0 {
+    //         return Err(probe_error.into());
+    //     }
 
-        Ok(Device {
-            device,
-            phantom: PhantomData,
-        })
-    }
+    //     Ok(Device {
+    //         device,
+    //         parent_context: Rc::clone(&self),
+    //     })
+    // }
 
     /// Use this function to retrieve an output device given its index. Before getting devices
     /// you must call `Context::flush_events()` at least once, otherwise this will return
@@ -484,8 +472,8 @@ impl<'a> Context<'a> {
     ///     println!("Device {} is called {}", i, dev.name());
     /// }
     /// ```
-    pub fn output_device(&self, index: usize) -> Result<Device> {
-        let device = unsafe { raw::soundio_get_output_device(self.soundio, index as c_int) };
+    pub fn output_device(&self, index: usize) -> Result<Rc<Device>> {
+        let device = unsafe { raw::soundio_get_output_device(self.0.soundio, index as c_int) };
         if device.is_null() {
             return Err(Error::OpeningDevice);
         }
@@ -496,17 +484,14 @@ impl<'a> Context<'a> {
             return Err(probe_error.into());
         }
 
-        Ok(Device {
-            device,
-            phantom: PhantomData,
-        })
+        Ok(Rc::new(Device::new(device, Context(Rc::clone(&self.0)))))
     }
 
     /// Get the number of input devices in this machine. You *must* call
     /// `Context::flush_events()` at least once before calling this function
     /// otherwise it will panic!
     pub fn input_device_count(&self) -> usize {
-        let count = unsafe { raw::soundio_input_device_count(self.soundio) };
+        let count = unsafe { raw::soundio_input_device_count(self.0.soundio) };
         assert!(
             count != -1,
             "flush_events() must be called before input_device_count()"
@@ -518,7 +503,7 @@ impl<'a> Context<'a> {
     /// `Context::flush_events()` at least once before calling this function
     /// otherwise it will panic!
     pub fn output_device_count(&self) -> usize {
-        let count = unsafe { raw::soundio_output_device_count(self.soundio) };
+        let count = unsafe { raw::soundio_output_device_count(self.0.soundio) };
         assert!(
             count != -1,
             "flush_events() must be called before output_device_count()"
@@ -547,7 +532,7 @@ impl<'a> Context<'a> {
     /// }
     /// ```
     pub fn default_input_device_index(&self) -> Option<usize> {
-        let index = unsafe { raw::soundio_default_input_device_index(self.soundio) };
+        let index = unsafe { raw::soundio_default_input_device_index(self.0.soundio) };
         match index {
             -1 => None,
             _ => Some(index as usize),
@@ -575,7 +560,7 @@ impl<'a> Context<'a> {
     /// }
     /// ```
     pub fn default_output_device_index(&self) -> Option<usize> {
-        let index = unsafe { raw::soundio_default_output_device_index(self.soundio) };
+        let index = unsafe { raw::soundio_default_output_device_index(self.0.soundio) };
         match index {
             -1 => None,
             _ => Some(index as usize),
@@ -598,14 +583,14 @@ impl<'a> Context<'a> {
     ///     println!("Device {} ", dev.name());
     /// }
     /// ```
-    pub fn input_devices(&self) -> Result<Vec<Device>> {
-        let count = self.input_device_count();
-        let mut devices = Vec::new();
-        for i in 0..count {
-            devices.push(self.input_device(i)?);
-        }
-        Ok(devices)
-    }
+    // pub fn input_devices(&self) -> Result<Vec<Device>> {
+    //     let count = self.input_device_count();
+    //     let mut devices = Vec::new();
+    //     for i in 0..count {
+    //         devices.push(self.input_device(i)?);
+    //     }
+    //     Ok(devices)
+    // }
 
     /// Get all the output devices as a vector. You *must* call `Context::flush_events()`
     /// at least once before calling this function. If you don't it will panic.
@@ -623,11 +608,11 @@ impl<'a> Context<'a> {
     ///     println!("Device {} ", dev.name());
     /// }
     /// ```
-    pub fn output_devices(&self) -> Result<Vec<Device>> {
+    pub fn output_devices(&self) -> Result<Vec<Rc<Device>>> {
         let count = self.output_device_count();
         let mut devices = Vec::new();
         for i in 0..count {
-            devices.push(self.output_device(i)?);
+            devices.push(self.clone().output_device(i)?);
         }
         Ok(devices)
     }
@@ -647,13 +632,13 @@ impl<'a> Context<'a> {
     /// let dev = ctx.default_input_device().expect("No default device");
     /// println!("The default input device is {}", dev.name());
     /// ```
-    pub fn default_input_device(&self) -> Result<Device> {
-        let index = match self.default_input_device_index() {
-            Some(x) => x,
-            None => return Err(Error::NoSuchDevice),
-        };
-        self.input_device(index)
-    }
+    // pub fn default_input_device(&self) -> Result<Device> {
+    //     let index = match self.default_input_device_index() {
+    //         Some(x) => x,
+    //         None => return Err(Error::NoSuchDevice),
+    //     };
+    //     self.input_device(index)
+    // }
 
     /// Get the default output device. You *must* call `Context::flush_events()`
     /// at least once before calling this function. If you don't it will panic.
@@ -670,7 +655,7 @@ impl<'a> Context<'a> {
     /// let dev = ctx.default_output_device().expect("No default device");
     /// println!("The default output device is {}", dev.name());
     /// ```
-    pub fn default_output_device(&self) -> Result<Device> {
+    pub fn default_output_device(&self) -> Result<Rc<Device>> {
         let index = match self.default_output_device_index() {
             Some(x) => x,
             None => return Err(Error::NoSuchDevice),
@@ -679,7 +664,7 @@ impl<'a> Context<'a> {
     }
 }
 
-impl<'a> Drop for Context<'a> {
+impl Drop for ContextData {
     fn drop(&mut self) {
         unsafe {
             // This also disconnects if necessary.
@@ -690,17 +675,30 @@ impl<'a> Drop for Context<'a> {
 
 // This allows wakeup and wait_events to be called from other threads.
 // TODO: Find out exactly the thread-safety properties of libsoundio.
-unsafe impl<'a> Send for Context<'a> {}
-unsafe impl<'a> Sync for Context<'a> {}
+unsafe impl Send for Context {}
+unsafe impl Sync for Context {}
 
 #[cfg(test)]
 mod tests {
 
+    struct Test {
+        ctx: Rc<Context>,
+        dev: Rc<Device>,
+    }
+
     use super::*;
 
     #[test]
+    fn testme() {
+        let ctx = Rc::new(Context::default());
+        ctx.connect();
+        let dev = ctx.default_output_device().unwrap();
+        let me = Test { ctx, dev };
+    }
+
+    #[test]
     fn connect_default_backend() {
-        let mut ctx = Context::new();
+        let ctx = Context::default();
         match ctx.connect() {
             Ok(()) => println!("Connected to {}", ctx.current_backend()),
             Err(e) => println!("Couldn't connect: {}", e),
@@ -709,7 +707,7 @@ mod tests {
 
     #[test]
     fn available_backends() {
-        let ctx = Context::new();
+        let ctx = Context::default();
         println!("Available backends: {:?}", ctx.available_backends());
     }
 

@@ -299,3 +299,31 @@ impl fmt::Display for Format {
         f.write_str(c_str.to_str().unwrap())
     }
 }
+
+pub trait HasDefaultFormat {
+    const DEFAULT_FORMAT: Format;
+}
+impl HasDefaultFormat for f32 {
+    const DEFAULT_FORMAT: Format = Format::Float32LE;
+}
+impl HasDefaultFormat for f64 {
+    const DEFAULT_FORMAT: Format = Format::Float64LE;
+}
+impl HasDefaultFormat for u8 {
+    const DEFAULT_FORMAT: Format = Format::U8;
+}
+impl HasDefaultFormat for u16 {
+    const DEFAULT_FORMAT: Format = native::U16NE;
+}
+impl HasDefaultFormat for u32 {
+    const DEFAULT_FORMAT: Format = native::U32NE;
+}
+impl HasDefaultFormat for i8 {
+    const DEFAULT_FORMAT: Format = Format::S8;
+}
+impl HasDefaultFormat for i16 {
+    const DEFAULT_FORMAT: Format = native::S16NE;
+}
+impl HasDefaultFormat for i32 {
+    const DEFAULT_FORMAT: Format = native::S32NE;
+}

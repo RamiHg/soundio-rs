@@ -1,31 +1,34 @@
-extern crate libsoundio_sys as raw;
-
-use super::error::*;
-use super::format::*;
-use super::instream::*;
-use super::layout::*;
-use super::outstream::*;
-use super::types::*;
-use super::util::*;
-
-use std::marker::PhantomData;
 use std::os::raw::c_int;
+use std::rc::Rc;
 use std::slice;
+
+use libsoundio_sys as raw;
+
+use crate::context::Context;
+use crate::format::Format;
+use crate::layout::ChannelLayout;
+use crate::stream;
+use crate::stream::{OutStream, SampleRate, StreamOptions};
+use crate::util::{latin1_to_string, utf8_to_string};
 
 /// Device represents an input or output device.
 ///
 /// It is obtained from a `Context` using `Context::input_device()` or `Context::output_device()`.
 /// You can use it to open an input stream or output stream.
-pub struct Device<'a> {
+pub struct Device {
     /// The raw pointer to the device.
-    pub device: *mut raw::SoundIoDevice,
-
-    /// This is just here to say that Device cannot outlive the Context it was created from.
-    /// 'a is the lifetime of that Context.
-    pub phantom: PhantomData<&'a ()>,
+    device: *mut raw::SoundIoDevice,
+    _parent_context: Context,
 }
 
-impl<'a> Device<'a> {
+impl Device {
+    pub fn new(device: *mut raw::SoundIoDevice, context: Context) -> Device {
+        Device {
+            device,
+            _parent_context: context,
+        }
+    }
+
     /// A string that uniquely identifies this device.
     ///
     /// If the same physical device supports both input and output, it is split
@@ -46,27 +49,6 @@ impl<'a> Device<'a> {
     pub fn name(&self) -> String {
         // This is explicitly UTF-8.
         utf8_to_string(unsafe { (*self.device).name })
-    }
-
-    /// Tells whether this device is an input device or an output device.
-    ///
-    /// If a physical device supports input and output it is split into two
-    /// `Device`s, with the same `Device::id()` but different `Device::aim()`s.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut ctx = soundio::Context::new();
-    /// ctx.connect_backend(soundio::Backend::Dummy).expect("Couldn't connect to backend");
-    /// for dev in ctx.input_devices().expect("Couldn't get input devices") {
-    ///     assert_eq!(dev.aim(), soundio::DeviceAim::Input);
-    /// }
-    /// for dev in ctx.output_devices().expect("Couldn't get output devices") {
-    ///     assert_eq!(dev.aim(), soundio::DeviceAim::Output);
-    /// }
-    /// ```
-    pub fn aim(&self) -> DeviceAim {
-        unsafe { (*self.device).aim.into() }
     }
 
     /// Returns the list of channel layouts supported by this device.
@@ -195,16 +177,6 @@ impl<'a> Device<'a> {
         unsafe { (*self.device).is_raw != 0 }
     }
 
-    /// Sorts the channels returned by `layouts()` by channel count, descending.
-    ///
-    /// This mutates the internal list of layouts, which is why it takes `&mut self`.
-    pub fn sort_channel_layouts(&mut self) {
-        // It may be a good idea to remove this function. I don't think it adds to the API.
-        unsafe {
-            raw::soundio_device_sort_channel_layouts(self.device);
-        }
-    }
-
     /// Returns whether or not a given sample `Format` is supported by this device.
     ///
     /// # Examples
@@ -258,7 +230,7 @@ impl<'a> Device<'a> {
     /// let out_dev = ctx.default_output_device().expect("Couldn't open default output");
     /// println!("Nearest sample rate to 44000: {}", out_dev.nearest_sample_rate(44000));
     /// ```
-    pub fn nearest_sample_rate(&self, sample_rate: i32) -> i32 {
+    fn nearest_sample_rate(&self, sample_rate: i32) -> i32 {
         unsafe { raw::soundio_device_nearest_sample_rate(self.device, sample_rate as c_int) as i32 }
     }
 
@@ -307,71 +279,58 @@ impl<'a> Device<'a> {
     ///
     /// `'a` is the lifetime of the `Device`. The `OutStream` lifetime `'b` must be less than or equal to `'a` (indicated by `'b: 'a`).
     /// Also the callbacks must have a lifetime greater than or equal to `'b`. They do not need to be `'static`.
-    pub fn open_outstream<'b: 'a, WriteCB, UnderflowCB, ErrorCB>(
-        &'a self,
-        sample_rate: i32,
-        format: Format,
-        layout: ChannelLayout,
-        latency: f64,
-        write_callback: WriteCB,
-        underflow_callback: Option<UnderflowCB>,
-        error_callback: Option<ErrorCB>,
-    ) -> Result<OutStream<'b>>
-    where
-        WriteCB: 'b + FnMut(&mut OutStreamWriter),
-        UnderflowCB: 'b + FnMut(),
-        ErrorCB: 'b + FnMut(Error),
-    {
-        let mut outstream = unsafe { raw::soundio_outstream_create(self.device) };
-        if outstream.is_null() {
-            // Note that we should really abort() here (that's what the rest of Rust
-            // does on OOM), but there is no stable way to abort in Rust that I can see.
-            panic!("soundio_outstream_create() failed (out of memory).");
-        }
-
-        unsafe {
-            (*outstream).sample_rate = sample_rate;
-            (*outstream).format = format.into();
-            (*outstream).layout = layout.into();
-            (*outstream).software_latency = latency;
-            (*outstream).write_callback = outstream_write_callback;
-            (*outstream).underflow_callback = Some(outstream_underflow_callback);
-            (*outstream).error_callback = Some(outstream_error_callback);
-        }
-
-        let mut stream = OutStream {
-            userdata: Box::new(OutStreamUserData {
-                outstream,
-                write_callback: Box::new(write_callback),
-                underflow_callback: match underflow_callback {
-                    Some(cb) => Some(Box::new(cb)),
-                    None => None,
-                },
-                error_callback: match error_callback {
-                    Some(cb) => Some(Box::new(cb)),
-                    None => None,
-                },
-            }),
-            phantom: PhantomData,
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let context = soundio::Context::default();
+    /// context.connect()?;
+    /// let device = context.default_output_device()?;
+    /// let stream = device.open_outstream(soundio::StreamOptions::<[i16; 2]>::default())?;
+    /// // # Ok::<(), soundio::Error>(())
+    /// ```
+    pub fn open_outstream<Frame: sample::Frame>(
+        self: Rc<Device>,
+        options: StreamOptions<Frame>,
+        callback: Box<stream::Callback>,
+    ) -> Result<Rc<OutStream>> {
+        let mut raw = unsafe {
+            raw::soundio_outstream_create(self.device)
+                .as_mut()
+                .expect("soundio_outstream_create() failed (out of memory).")
         };
 
-        // Safe userdata pointer.
-        unsafe {
-            (*stream.userdata.outstream).userdata =
-                stream.userdata.as_mut() as *mut OutStreamUserData as *mut _;
-        }
+        let outstream = Rc::new(OutStream {
+            raw,
+            callback,
+            parent_device: Rc::clone(&self),
+        });
 
-        match unsafe { raw::soundio_outstream_open(stream.userdata.outstream) } {
+        raw.sample_rate = match options.sample_rate {
+            stream::SampleRate::Exact(rate) => rate,
+            stream::SampleRate::NearestTo(rate) => self.nearest_sample_rate(rate),
+        };
+        raw.format = options.format.into();
+        raw.layout = options.layout.into();
+        raw.software_latency =
+            1.0 / raw.sample_rate as f64 * options.desired_frames_per_buffer.unwrap_or(0) as f64;
+        raw.software_latency = 0.0;
+        raw.write_callback = stream::outstream_write_callback;
+        raw.underflow_callback = Some(stream::outstream_underflow_callback);
+        raw.error_callback = Some(stream::outstream_error_callback);
+        raw.userdata = outstream.as_ref() as *const _ as *mut _;
+
+        match unsafe { raw::soundio_outstream_open(raw) } {
             0 => {}
             x => return Err(x.into()),
         };
 
-        match unsafe { (*stream.userdata.outstream).layout_error } {
+        match raw.layout_error {
             0 => {}
             x => return Err(x.into()),
-        }
+        };
 
-        Ok(stream)
+        Ok(outstream)
     }
 
     /// Open an input stream on an input device. After opening you can start, pause and stop it
@@ -411,6 +370,7 @@ impl<'a> Device<'a> {
     ///
     /// `'a` is the lifetime of the `Device`. The `InStream` lifetime `'b` must be less than or equal to `'a` (indicated by `'b: 'a`).
     /// Also the callbacks must have a lifetime greater than or equal to `'b`. They do not need to be `'static`.
+    #[cfg(todo_unimplemented)]
     pub fn open_instream<'b: 'a, ReadCB, OverflowCB, ErrorCB>(
         &'a self,
         sample_rate: i32,
@@ -479,7 +439,7 @@ impl<'a> Device<'a> {
     }
 }
 
-impl<'a> Drop for Device<'a> {
+impl Drop for Device {
     fn drop(&mut self) {
         unsafe {
             raw::soundio_device_unref(self.device);
