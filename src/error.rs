@@ -54,6 +54,13 @@ pub enum Error {
     Unknown,
 }
 
+pub fn from_code(code: c_int) -> Result<()> {
+    match code {
+        0 => Ok(()),
+        _ => Err(code.into()),
+    }
+}
+
 impl From<c_int> for Error {
     fn from(err: c_int) -> Error {
         match err {

@@ -5,10 +5,12 @@ use std::slice;
 use libsoundio_sys as raw;
 
 use crate::context::Context;
+use crate::error::Result;
 use crate::format::Format;
 use crate::layout::ChannelLayout;
 use crate::stream;
 use crate::stream::{OutStream, SampleRate, StreamOptions};
+use crate::types::SampleRateRange;
 use crate::util::{latin1_to_string, utf8_to_string};
 
 /// Device represents an input or output device.
@@ -121,12 +123,14 @@ impl Device {
     /// # Examples
     ///
     /// ```
-    /// let mut ctx = soundio::Context::new();
-    /// ctx.connect_backend(soundio::Backend::Dummy).expect("Couldn't connect to backend");
+    /// let mut ctx = soundio::Context::default();
+    /// ctx.connect().expect("Couldn't connect to backend");
     /// let out_dev = ctx.default_output_device().expect("Couldn't open default output");
+    /// dbg!(out_dev.current_sample_rate());
     /// for rate in out_dev.sample_rates() {
     ///     println!("Sample rate min: {} max {}", rate.min, rate.max);
     /// }
+    /// panic!();
     /// ```
     pub fn sample_rates(&self) -> Vec<SampleRateRange> {
         let sample_rates_slice = unsafe {
@@ -144,8 +148,17 @@ impl Device {
     /// rate defined before a stream is opened. See `Device::current_format()` for
     /// more information.
     ///
-    /// If `current_sample_rate()` is unavailable it will return 0.
-    pub fn current_sample_rate(&self) -> i32 {
+    /// If `default_sample_rate()` is unavailable it will return 0.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut ctx = soundio::Context::default();
+    /// ctx.connect().expect("Couldn't connect to backend");
+    /// let out_dev = ctx.default_output_device().expect("Couldn't open default output");
+    /// println!(out_dev.default_sample_rate());
+    /// ```
+    pub fn default_sample_rate(&self) -> i32 {
         unsafe { (*self.device).sample_rate_current as _ }
     }
 
@@ -153,15 +166,15 @@ impl Device {
     /// irrelevant, it is set to 0.0.
     ///
     /// For PulseAudio and WASAPI this value is unknown until you open a stream.
-    pub fn software_latency(&self) -> SoftwareLatency {
-        unsafe {
-            SoftwareLatency {
-                min: (*self.device).software_latency_min,
-                max: (*self.device).software_latency_max,
-                current: (*self.device).software_latency_current,
-            }
-        }
-    }
+    // pub fn software_latency(&self) -> SoftwareLatency {
+    //     unsafe {
+    //         SoftwareLatency {
+    //             min: (*self.device).software_latency_min,
+    //             max: (*self.device).software_latency_max,
+    //             current: (*self.device).software_latency_current,
+    //         }
+    //     }
+    // }
 
     /// Return whether the device has raw access.
     ///
@@ -292,8 +305,8 @@ impl Device {
     pub fn open_outstream<Frame: sample::Frame>(
         self: Rc<Device>,
         options: StreamOptions<Frame>,
-        callback: Box<stream::Callback>,
-    ) -> Result<Rc<OutStream>> {
+        callback: stream::BoxedCallback<Frame>,
+    ) -> Result<Rc<OutStream<Frame>>> {
         let mut raw = unsafe {
             raw::soundio_outstream_create(self.device)
                 .as_mut()
@@ -304,6 +317,7 @@ impl Device {
             raw,
             callback,
             parent_device: Rc::clone(&self),
+            options: options.clone(),
         });
 
         raw.sample_rate = match options.sample_rate {
@@ -315,7 +329,7 @@ impl Device {
         raw.software_latency =
             1.0 / raw.sample_rate as f64 * options.desired_frames_per_buffer.unwrap_or(0) as f64;
         raw.software_latency = 0.0;
-        raw.write_callback = stream::outstream_write_callback;
+        raw.write_callback = stream::outstream_write_callback::<Frame>;
         raw.underflow_callback = Some(stream::outstream_underflow_callback);
         raw.error_callback = Some(stream::outstream_error_callback);
         raw.userdata = outstream.as_ref() as *const _ as *mut _;

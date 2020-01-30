@@ -2,23 +2,25 @@ use std::os::raw::c_int;
 use std::rc::Rc;
 
 use crate::device::Device;
-use crate::error::Error;
+use crate::error::{self, Error, Result};
 use crate::format::{Format, HasDefaultFormat};
 use crate::layout::{ChannelLayout, HasDefaultLayout};
 
-pub type Callback = Box<dyn FnMut()>;
+pub type BoxedCallback<Frame> = Box<dyn FnMut(&mut [Frame])>;
 
+#[derive(Clone)]
 pub enum SampleRate {
     Exact(i32),
     NearestTo(i32),
 }
 
-pub struct StreamOptions<Frame: sample::Frame> {
+#[derive(Clone)]
+pub struct StreamOptions<Frame> {
     pub sample_rate: SampleRate,
     pub format: Format,
     pub desired_frames_per_buffer: Option<i32>,
 
-    layout: ChannelLayout,
+    pub layout: ChannelLayout,
     phantom: std::marker::PhantomData<Frame>,
 }
 
@@ -38,7 +40,7 @@ where
     }
 }
 
-impl<Frame: sample::Frame> StreamOptions<Frame> {
+impl<Frame> StreamOptions<Frame> {
     /// Returns a `StreamOptions` with the given sample rate and format.
     ///
     /// Use this method if the frame type does not have a default frame and layout (see
@@ -65,63 +67,78 @@ impl<Frame: sample::Frame> StreamOptions<Frame> {
     }
 }
 
-pub struct OutStream {
+pub struct OutStream<Frame: sample::Frame> {
     pub raw: *mut raw::SoundIoOutStream,
-    pub callback: Callback,
+    pub callback: BoxedCallback<Frame>,
     pub parent_device: Rc<Device>,
+    pub options: StreamOptions<Frame>,
 }
 
-pub extern "C" fn outstream_write_callback(
-    stream: *mut raw::SoundIoOutStream,
+impl<Frame: sample::Frame> Drop for OutStream<Frame> {
+    fn drop(&mut self) {
+        unsafe { raw::soundio_outstream_destroy(self.raw) }
+    }
+}
+
+impl<Frame: sample::Frame> OutStream<Frame> {
+    pub fn start(&self) -> Result<()> {
+        unsafe { error::from_code(raw::soundio_outstream_start(self.raw)) }
+    }
+}
+
+pub extern "C" fn outstream_write_callback<Frame: sample::Frame>(
+    raw: *mut raw::SoundIoOutStream,
     frame_count_min: c_int,
     frame_count_max: c_int,
 ) {
-    // // Use stream.userdata to get a reference to the OutStreamUserData object.
-    // let outstream = unsafe { (*stream).userdata as *mut OutStream };
-    // let outstream = outstream.as_mut().unwrap();
-
-    // let stream_writer = OutStreamWriter {
-    //     outstream: outstream,
-    //     frame_count_min: frame_count_min as _,
-    //     frame_count_max: frame_count_max as _,
-    //     write_started: false,
-    //     channel_areas: Vec::new(),
-    //     frame_count: 0,
-    //     phantom: PhantomData,
-    // };
-
-    // (outstream.write_callback)(&mut stream_writer);
+    let outstream = unsafe { ((*raw).userdata as *mut OutStream<Frame>).as_mut().unwrap() };
+    let mut sound_areas = std::ptr::null_mut();
+    let mut frame_count = (outstream.options.desired_frames_per_buffer.unwrap_or(0) as c_int)
+        .max(frame_count_min)
+        .min(frame_count_max);
+    match unsafe { raw::soundio_outstream_begin_write(raw, &mut sound_areas, &mut frame_count) } {
+        0 => (),
+        x => panic!("{:?}", Error::from(x)),
+    };
+    let sound_areas = unsafe { std::slice::from_raw_parts_mut(sound_areas, Frame::n_channels()) };
+    // Make sure that the frame stride is what we think it is.
+    assert_eq!(
+        sound_areas[0].step,
+        (std::mem::size_of::<Frame::Sample>() * Frame::n_channels()) as i32
+    );
+    // Finally, convert to a buffer of our frame type.
+    let buffer: &mut [Frame] = unsafe {
+        std::slice::from_raw_parts_mut(
+            sound_areas[0].ptr as *mut _,
+            frame_count as usize * Frame::n_channels(),
+        )
+    };
+    // Call the callback.
+    (outstream.callback)(buffer);
+    match unsafe { raw::soundio_outstream_end_write(raw) } {
+        0 => (),
+        x => panic!("{:?}", Error::from(x)),
+    };
 }
 
 pub extern "C" fn outstream_underflow_callback(stream: *mut raw::SoundIoOutStream) {
-    // Use stream.userdata to get a reference to the OutStreamUserData object.
-    // let raw_userdata_pointer = unsafe { (*stream).userdata as *mut OutStreamUserData };
-    // let userdata = unsafe { &mut (*raw_userdata_pointer) };
-
-    // if let Some(ref mut cb) = userdata.underflow_callback {
-    //     cb();
-    // } else {
-    //     println!("Underflow!");
-    // }
+    // TODO: Do we care about underflow?
 }
 
 pub extern "C" fn outstream_error_callback(stream: *mut raw::SoundIoOutStream, err: c_int) {
-    // Use stream.userdata to get a reference to the OutStreamUserData object.
-    // let raw_userdata_pointer = unsafe { (*stream).userdata as *mut OutStreamUserData };
-    // let userdata = unsafe { &mut (*raw_userdata_pointer) };
-
-    // if let Some(ref mut cb) = userdata.error_callback {
-    //     cb(err.into());
-    // } else {
-    //     println!("Error: {}", Error::from(err));
-    // }
+    // TODO: Do we care about error handling?
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    use crate::context::Context;
+    use crate::device::Device;
+
     use crate::format::native;
+
+    fn dummy(_buffer: &mut [[f32; 2]]) {}
 
     #[test]
     fn test_default_format() {
@@ -129,5 +146,17 @@ mod tests {
             StreamOptions::<[f32; 2]>::default().format,
             native::Float32NE
         );
+    }
+
+    #[test]
+    fn test_opens_outstream() -> Result<()> {
+        let context = Context::default();
+        context.connect()?;
+        let device = context.default_output_device()?;
+        let stream =
+            device.open_outstream(StreamOptions::<[f32; 2]>::default(), Box::new(dummy))?;
+        stream.start()?;
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        Ok(())
     }
 }
