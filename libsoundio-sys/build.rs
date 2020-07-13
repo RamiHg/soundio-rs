@@ -106,6 +106,14 @@ fn main() {
     // Link soundio.
     println!("cargo:rustc-link-lib=static=soundio");
 
+    // Actually only necessary on Raspberry Pi
+    // but it doesn't effect build on e.g. Ubuntu.
+    if target.contains("linux") {
+        println!("cargo:rustc-link-lib=asound");
+        println!("cargo:rustc-link-lib=pulse");
+        println!("cargo:rustc-link-lib=jack");
+    }
+
     // OSX
     if target.contains("apple") {
         println!("cargo:rustc-link-lib=framework=AudioToolbox");
