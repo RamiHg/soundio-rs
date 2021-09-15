@@ -48,10 +48,35 @@ fn main() {
 
     // Is the target Windows?
     let windows = target.contains("windows");
+    let linux = target.contains("linux");
 
     // Create a new cmake config.
     let mut cfg = cmake::Config::new("libsoundio");
+    cfg.define("ENABLE_JACK", "OFF");
+    cfg.define("ENABLE_ALSA", "OFF");
+    cfg.define("ENABLE_PULSE", "OFF");
 
+    #[cfg(feature = "jack_support")]
+    {
+        cfg.define("ENABLE_JACK", "ON");
+        if linux {
+            println!("cargo:rustc-link-lib=jack");
+        }
+    }
+    #[cfg(feature = "alsa_support")]
+    {
+        cfg.define("ENABLE_ALSA", "ON");
+        if linux {
+            println!("cargo:rustc-link-lib=asound");
+        }
+    }
+    #[cfg(feature = "pulse_support")]
+    {
+        cfg.define("ENABLE_PULSE", "ON");
+        if linux {
+            println!("cargo:rustc-link-lib=pulse");
+        }
+    }
     // When cross-compiling, we're pretty unlikely to find a `dlltool` binary
     // lying around, so try to find another if it exists
     // What is dlltool?

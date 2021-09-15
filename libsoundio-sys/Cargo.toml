@@ -22,3 +22,8 @@ cc = "1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+pulse_support = []
+jack_support = []
+alsa_support = []
