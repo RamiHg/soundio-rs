@@ -8,6 +8,7 @@ use super::outstream::*;
 use super::types::*;
 use super::util::*;
 
+use std::fmt::Display;
 use std::marker::PhantomData;
 use std::os::raw::c_int;
 use std::slice;
@@ -16,6 +17,7 @@ use std::slice;
 ///
 /// It is obtained from a `Context` using `Context::input_device()` or `Context::output_device()`.
 /// You can use it to open an input stream or output stream.
+#[derive(Debug)]
 pub struct Device<'a> {
     /// The raw pointer to the device.
     pub device: *mut raw::SoundIoDevice,
@@ -484,5 +486,11 @@ impl<'a> Drop for Device<'a> {
         unsafe {
             raw::soundio_device_unref(self.device);
         }
+    }
+}
+
+impl<'a> Display for Device<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }
