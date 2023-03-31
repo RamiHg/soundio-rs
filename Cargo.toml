@@ -1,7 +1,10 @@
 [package]
 name = "soundio"
 version = "0.2.1"
-authors = ["Tim Hutt <tdhutt@gmail.com>", "Ramy <RamiHg@users.noreply.github.com>"]
+authors = [
+    "Tim Hutt <tdhutt@gmail.com>",
+    "Ramy <RamiHg@users.noreply.github.com>",
+]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/RamiHg/soundio-rs"
@@ -15,6 +18,14 @@ categories = ["multimedia", "multimedia::audio"]
 
 [dependencies]
 libsoundio-sys = { path = "libsoundio-sys", version = "0.3.0" }
+
+[features]
+default = []
+jack = ["libsoundio-sys/jack"]
+pulseaudio = ["libsoundio-sys/pulseaudio"]
+alsa = ["libsoundio-sys/alsa"]
+coreaudio = ["libsoundio-sys/coreaudio"]
+wasapi = ["libsoundio-sys/wasapi"]
 
 # Examples
 

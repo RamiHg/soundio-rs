@@ -2,7 +2,10 @@
 name = "libsoundio-sys"
 edition = "2018"
 version = "0.3.0"
-authors = ["Tim Hutt <tdhutt@gmail.com>", "Ramy <RamiHg@users.noreply.github.com>"]
+authors = [
+    "Tim Hutt <tdhutt@gmail.com>",
+    "Ramy <RamiHg@users.noreply.github.com>",
+]
 links = "soundio"
 build = "build.rs"
 repository = "https://github.com/RamiHg/soundio-rs/libsoundio-sys"
@@ -22,3 +25,11 @@ cc = "1.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
+
+[features]
+default = []
+jack = []
+pulseaudio = []
+alsa = []
+coreaudio = []
+wasapi = []
