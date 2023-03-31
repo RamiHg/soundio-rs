@@ -92,9 +92,20 @@ fn main() {
         .define("BUILD_TESTS", "OFF")
         .build();
 
+    let static_lib_path = dst.join("build").join("libsoundio.a");
+
+    assert!(
+        static_lib_path.exists(),
+        "{} not found",
+        static_lib_path.display()
+    );
+
     println!(
         "cargo:rustc-link-search=native={}",
-        dst.join("lib").display()
+        static_lib_path
+            .parent()
+            .expect("No parent of static library")
+            .display()
     );
 
     // Windows...
