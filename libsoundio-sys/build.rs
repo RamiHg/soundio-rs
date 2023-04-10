@@ -85,31 +85,72 @@ fn main() {
     t!(fs::create_dir_all(env::var("OUT_DIR").unwrap()));
 
     // Don't bother with shared libs.
-    let dst = cfg
+    let mut cfg = cfg
         .define("BUILD_DYNAMIC_LIBS", "OFF")
         .define("BUILD_STATIC_LIBS", "ON")
         .define("BUILD_EXAMPLE_PROGRAMS", "OFF")
-        .define("BUILD_TESTS", "OFF")
-        .build();
+        .define("BUILD_TESTS", "OFF");
+
+    if cfg!(feature = "jack") {
+        cfg = cfg.define("BUILD_JACK", "ON");
+    }
+
+    if cfg!(feature = "pulseaudio") {
+        cfg = cfg.define("BUILD_PULSEAUDIO", "ON");
+        println!("cargo:rustc-link-lib=pulse");
+        println!("cargo:rustc-link-lib=pulse-simple");
+        println!("cargo:rustc-link-lib=pulse-mainloop-glib");
+    }
+
+    if cfg!(feature = "alsa") {
+        cfg = cfg.define("BUILD_ALSA", "ON");
+        println!("cargo:rustc-link-lib=asound");
+    }
+
+    if cfg!(feature = "coreaudio") {
+        cfg = cfg.define("BUILD_COREAUDIO", "ON");
+        // No need to issue link directives here, they are done below.
+    }
+
+    if cfg!(feature = "wasapi") {
+        cfg = cfg.define("BUILD_WASAPI", "ON");
+        // No need to issue link directives here, they are done below.
+    }
+
+    let dst = cfg.build();
+
+    let static_lib_path = dst.join("build").join("libsoundio.a");
+
+    assert!(
+        static_lib_path.exists(),
+        "{} not found",
+        static_lib_path.display()
+    );
 
     println!(
         "cargo:rustc-link-search=native={}",
-        dst.join("lib").display()
+        static_lib_path
+            .parent()
+            .expect("No parent of static library")
+            .display()
     );
+
+    // Link soundio.
+    println!("cargo:rustc-link-lib=static=soundio");
+
+    // Link pulse
 
     // Windows...
     if target.contains("windows") {
         // We need to link ole32 on Windows.
         println!("cargo:rustc-link-lib=ole32");
-    }
-
-    // Link soundio.
-    println!("cargo:rustc-link-lib=static=soundio");
-
-    // OSX
-    if target.contains("apple") {
+    } else if target.contains("apple") {
         println!("cargo:rustc-link-lib=framework=AudioToolbox");
         println!("cargo:rustc-link-lib=framework=CoreAudio");
         println!("cargo:rustc-link-lib=framework=CoreFoundation");
+    } else {
+        println!("cargo:rustc-link-lib=pulse");
+        println!("cargo:rustc-link-lib=pulse-simple");
+        println!("cargo:rustc-link-lib=pulse-mainloop-glib");
     }
 }
